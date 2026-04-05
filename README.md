@@ -8,14 +8,17 @@ Each command takes an image in, does one thing, and outputs an image. Chain them
 
 ## Samples
 
-| | |
-|:---:|:---:|
-| ![YouTube Thumbnail](samples/youtube-thumbnail.png) | ![iPhone Comparison](samples/iphone-comparison.png) |
-| **YouTube Thumbnail** — `generate` → `edit` → `crop` | **Product Comparison** — `generate` bg → `remove-bg` × 2 → `compose` |
-| Text behind subject, readable at any size. FAL renders the text as part of the scene so it interacts with depth. | Uses original Apple product images. AI edit models alter product details, so `remove-bg` from a trusted source image and compositing is the reliable path for product blogs. |
-| ![Magazine Cover](samples/magazine-cover.png) | ![Movie Poster](samples/movie-poster.png) |
-| **Magazine Cover** — `generate` → `compose` → `vignette` | **Sci-Fi Movie Poster** — `generate` → `edit` → `compose` → `grade` |
-| AI-generated portrait with Satori-rendered masthead, headlines, and credits layered on top. Pixel-perfect typography over AI art. | Multi-pass: Flux generates the scene, SeedDream adds volumetric fog, Satori renders the title and credits. Cinematic grade finishes it. |
+|                                                                                                                                                                                             |                                                                                                                                                                              |
+| :-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+|                                                                     ![YouTube Thumbnail](samples/youtube-thumbnail.png)                                                                     |                                                             ![iPhone Comparison](samples/iphone-comparison.png)                                                              |
+|                                                                    **YouTube Thumbnail** — `generate` → `edit` → `crop`                                                                     |                                                     **Product Comparison** — `generate` bg → `remove-bg` × 2 → `compose`                                                     |
+|                                      Text behind subject, readable at any size. FAL renders the text as part of the scene so it interacts with depth.                                       | Uses original Apple product images. AI edit models alter product details, so `remove-bg` from a trusted source image and compositing is the reliable path for product blogs. |
+|                                                                        ![Magazine Cover](samples/magazine-cover.png)                                                                        |                                                                  ![Movie Poster](samples/movie-poster.png)                                                                   |
+|                                                                    **Magazine Cover** — `generate` → `edit` → `compose`                                                                     |                                                     **Sci-Fi Movie Poster** — `generate` → `edit` → `compose` → `grade`                                                      |
+|                              AI-generated portrait with Satori-rendered masthead, headlines, and credits layered on top. Pixel-perfect typography over AI art.                              |                   Multi-pass: Flux generates the scene, SeedDream adds volumetric fog, Satori renders the title and credits. Cinematic grade finishes it.                    |
+|                                                                        ![Hoka Mach 7](samples/hoka-mach7-social.png)                                                                        |                                                                                                                                                                              |
+|                                                       **Product Social Ad** — `generate` → `edit` → `compose` → `grade` → `vignette`                                                        |                                                                                                                                                                              |
+| 4-pass workflow: Flux Dev generates floating shoe scene, SeedDream places "MACH 7" text behind the shoe for 3D depth, Satori renders product info overlay, then cool-tech grade + vignette. |                                                                                                                                                                              |
 
 ## Install
 
@@ -147,8 +150,16 @@ picture-it pipeline --spec steps.json -o final.png
 
 ```json
 [
-  { "op": "generate", "prompt": "dark stage with green spotlight", "size": "1200x630" },
-  { "op": "edit", "prompt": "place Figure 1 as a glowing cube in the spotlight", "assets": ["logo.png"] },
+  {
+    "op": "generate",
+    "prompt": "dark stage with green spotlight",
+    "size": "1200x630"
+  },
+  {
+    "op": "edit",
+    "prompt": "place Figure 1 as a glowing cube in the spotlight",
+    "assets": ["logo.png"]
+  },
   { "op": "crop", "size": "1200x630" },
   { "op": "grade", "name": "cinematic" },
   { "op": "vignette" }
@@ -166,7 +177,11 @@ picture-it batch --spec batch.json --output-dir ./images/
   {
     "id": "hero",
     "pipeline": [
-      { "op": "generate", "prompt": "abstract dark background", "size": "1200x630" },
+      {
+        "op": "generate",
+        "prompt": "abstract dark background",
+        "size": "1200x630"
+      },
       { "op": "grade", "name": "cinematic" }
     ]
   },
@@ -198,13 +213,13 @@ picture-it upscale -i small.png --scale 2 -o large.png
 
 The tool automatically picks the cheapest model that can handle the job:
 
-| Operation | Default model | Cost |
-|---|---|---|
-| `generate` | flux-schnell | $0.003 |
-| `edit` (1-10 images) | seedream | $0.04 |
-| `edit` (>10 images) | banana2 | $0.08 |
-| `edit --model banana-pro` | banana-pro | $0.15 |
-| `remove-bg` | birefnet | — |
+| Operation                 | Default model | Cost   |
+| ------------------------- | ------------- | ------ |
+| `generate`                | flux-schnell  | $0.003 |
+| `edit` (1-10 images)      | seedream      | $0.04  |
+| `edit` (>10 images)       | banana2       | $0.08  |
+| `edit --model banana-pro` | banana-pro    | $0.15  |
+| `remove-bg`               | birefnet      | —      |
 
 Override with `--model <name>` on any command.
 
@@ -212,15 +227,15 @@ Override with `--model <name>` on any command.
 
 Use `--platform <name>` on `generate`, `crop`, or `template`:
 
-| Preset | Size |
-|---|---|
-| `blog-featured` | 1200x630 |
-| `og-image` | 1200x630 |
-| `twitter-header` | 1500x500 |
-| `instagram-square` | 1080x1080 |
-| `instagram-story` | 1080x1920 |
-| `youtube-thumbnail` | 1280x720 |
-| `linkedin-post` | 1200x627 |
+| Preset              | Size      |
+| ------------------- | --------- |
+| `blog-featured`     | 1200x630  |
+| `og-image`          | 1200x630  |
+| `twitter-header`    | 1500x500  |
+| `instagram-square`  | 1080x1080 |
+| `instagram-story`   | 1080x1920 |
+| `youtube-thumbnail` | 1280x720  |
+| `linkedin-post`     | 1200x627  |
 
 ## Output behavior
 
@@ -287,6 +302,7 @@ cp -r skill/picture-it ~/.claude/skills/picture-it
 ```
 
 The skill teaches agents:
+
 - Which commands to use and when
 - Model selection (cheapest model that handles the job)
 - Multi-pass editing workflows (generate → edit → grade → crop)
