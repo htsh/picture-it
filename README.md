@@ -22,27 +22,15 @@ Each command takes an image in, does one thing, and outputs an image. Chain them
 
 ## Install
 
-Requires Bun 1.3+ on your `PATH`, even if you install the package with `npm` or `pnpm`.
-
-### Bun
-
-```bash
-bun install -g picture-it
-```
-
-### pnpm
-
-```bash
-pnpm add -g picture-it
-```
-
-### npm
+Requires Node.js 18+.
 
 ```bash
 npm install -g picture-it
+pnpm add -g picture-it
+bun install -g picture-it
 ```
 
-One-off usage also works if Bun is installed:
+One-off usage:
 
 ```bash
 bunx picture-it@latest info -i image.png
@@ -293,9 +281,9 @@ npx skills add geongeorge/picture-it -g
 npx skills add geongeorge/picture-it
 ```
 
-Browse on [skills.sh](https://skills.sh).
+Browse and review on [clawhub.ai](https://clawhub.ai/geongeorge/picture-it) | [skills.sh](https://skills.sh)
 
-You can also install manually by copying:
+You can also install manually:
 
 ```bash
 cp -r skill/picture-it ~/.claude/skills/picture-it
@@ -315,11 +303,22 @@ The skill teaches agents:
 
 The skill includes a `references/composition-guide.md` that agents load on demand for detailed techniques.
 
-## Publish to npm
+## Build and Publish
 
-1. Update the version in `package.json` and `index.ts` together.
-2. Make sure you are logged in to npm.
-3. Run `bun publish --dry-run` and inspect the package contents.
-4. Publish with `bun publish --access public`.
+Bun is required for development (building from TypeScript). The published package runs on plain Node.js.
 
-`picture-it` is currently available as an npm package name.
+```bash
+# Build (compiles TS → JS, replaces shebang with #!/usr/bin/env node)
+bun run build
+
+# Test the build
+node dist/index.js --version
+
+# Dry run
+npm publish --dry-run
+
+# Publish
+npm publish --access public
+```
+
+The `prepublishOnly` script runs the build automatically before publishing.

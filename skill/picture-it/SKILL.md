@@ -1,7 +1,7 @@
 ---
 name: picture-it
 description: Generate and edit images from the CLI using picture-it. Use this skill whenever the user asks to create, edit, or manipulate images — blog headers, social cards, hero images, product comparisons, YouTube thumbnails, movie posters, magazine covers, Instagram edits, background removal, or any visual content. Also trigger when the user mentions picture-it by name, wants to composite images, apply color grading, add text to images, remove or replace backgrounds, crop/resize photos, or needs any kind of image generation or photo editing from the terminal. This skill covers multi-pass AI image editing workflows that chain composable operations together.
-compatibility: Requires bun (1.3+), picture-it CLI (npm package), and FAL_KEY environment variable for AI operations. Needs network access to fal.ai for image generation/editing.
+compatibility: Requires Node.js 18+ and picture-it CLI (npm package). FAL_KEY environment variable needed for AI operations. Network access to fal.ai for image generation/editing.
 license: MIT
 metadata:
   author: geongeorge
@@ -9,7 +9,7 @@ metadata:
   homepage: https://github.com/geongeorge/picture-it
   source: https://github.com/geongeorge/picture-it
   package: https://www.npmjs.com/package/picture-it
-  required-binaries: bun, picture-it
+  required-binaries: node, picture-it
   required-env: FAL_KEY
   data-transmission: User images are uploaded to fal.ai for AI processing. See https://fal.ai/privacy for retention policy.
 ---
@@ -22,13 +22,13 @@ Source: https://github.com/geongeorge/picture-it | npm: https://www.npmjs.com/pa
 
 ## Prerequisites
 
-picture-it must be installed and configured. Requires Bun 1.3+ on PATH.
+picture-it must be installed and configured. Requires Node.js 18+.
 
 ```bash
 # Install (pick one)
-bun install -g picture-it
-pnpm add -g picture-it
 npm install -g picture-it
+pnpm add -g picture-it
+bun install -g picture-it
 
 # Setup
 picture-it download-fonts
