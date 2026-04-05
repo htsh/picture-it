@@ -260,6 +260,45 @@ picture-it replace-bg -i product.jpg --prompt "clean white studio background wit
 - **@fal-ai/client** — AI image generation and editing
 - **Commander.js** — CLI framework
 
+## Claude Skill
+
+picture-it includes a Claude skill so AI agents know how to use it effectively — which models to pick, how to chain operations, composition techniques, and gotchas.
+
+### Install the skill
+
+**Global install** (available in all projects):
+
+```bash
+npx skills add geon/picture-it -g
+```
+
+**Project install** (available in current project only):
+
+```bash
+npx skills add geon/picture-it
+```
+
+Browse on [skills.sh](https://skills.sh).
+
+You can also install manually by copying:
+
+```bash
+cp -r skill/picture-it ~/.claude/skills/picture-it
+```
+
+The skill teaches agents:
+- Which commands to use and when
+- Model selection (cheapest model that handles the job)
+- Multi-pass editing workflows (generate → edit → grade → crop)
+- Text-behind-subject technique for thumbnails and posters
+- Product photography with `remove-bg` + `compose` (preserves originals)
+- Background removal model selection (bria for best edges)
+- Common gotchas (rectangular glow artifacts, product detail alteration, etc.)
+- How to write effective FAL prompts
+- Overlay composition with JSON
+
+The skill includes a `references/composition-guide.md` that agents load on demand for detailed techniques.
+
 ## Publish to npm
 
 1. Update the version in `package.json` and `index.ts` together.
