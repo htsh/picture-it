@@ -1,11 +1,24 @@
 // Core types for picture-it v2 — composable operations architecture
 
 export type FalModel =
-  | "seedream"
-  | "banana2"
-  | "banana-pro"
+  // Generate only
+  | "flux-schnell"
   | "flux-dev"
-  | "flux-schnell";
+  | "recraft-v3"
+  | "recraft-v4"
+  | "imagineart"
+  | "fibo"
+  // Edit only
+  | "kontext"
+  | "kontext-lora"
+  | "reve"
+  | "reve-fast"
+  | "fibo-edit"
+  // Both generate and edit
+  | "seedream"
+  | "seedream-v4"
+  | "banana2"
+  | "banana-pro";
 
 export type ColorGrade =
   | "cinematic"

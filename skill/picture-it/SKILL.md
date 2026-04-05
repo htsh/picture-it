@@ -135,14 +135,50 @@ This avoids discovering mid-way that you need a different approach and wasting t
 
 Choose the right model for the job — don't overspend.
 
-**Generation (no input images):**
-- `flux-schnell` ($0.003) — Default. Fast, good quality. Use for backgrounds and base scenes.
-- `flux-dev` ($0.03) — Better quality. Use for hero images, portraits, detailed scenes where quality matters.
+**Generation-only models:**
 
-**Editing (with input images):**
-- `seedream` ($0.04) — Default. Good for compositing multiple images, placing objects in scenes, adding text. Handles up to 10 inputs.
-- `banana2` ($0.08) — Better image preservation. Use when you need the input image to stay more faithful, or >10 inputs.
-- `banana-pro` ($0.15) — Best quality, best text rendering. Use for premium work, complex edits, character consistency.
+| Model | Cost | Best for |
+|---|---|---|
+| `flux-schnell` | $0.003 | Default. Fast drafts, backgrounds, base scenes |
+| `imagineart` | $0.03 | High-fidelity realism, accurate text rendering |
+| `flux-dev` | $0.03 | Detailed scenes, portraits, cinematic quality |
+| `recraft-v3` | $0.04 | Text in images, vector art, brand-style graphics |
+| `fibo` | $0.04 | Enterprise, structured/controlled generation |
+| `recraft-v4` | $0.25 | Premium. Best composition, lighting, materials. Use sparingly |
+
+**Edit-only models:**
+
+| Model | Cost | Best for |
+|---|---|---|
+| `reve-fast` | $0.02 | Cheapest. Quick iterations, speed over refinement |
+| `kontext-lora` | $0.035 | Edits with LoRA styles, brand-consistent modifications |
+| `kontext` | $0.04 | Default. Targeted local edits, scene transforms, text placement |
+| `reve` | $0.04 | Style transforms, product variations, context-aware edits |
+| `fibo-edit` | $0.04 | Precise control with JSON + masks, object add/remove, restyling |
+
+**Both generate AND edit** (use `--model` with either `generate` or `edit`):
+
+| Model | Cost | Best for |
+|---|---|---|
+| `seedream-v4` | $0.03 | Budget option. Good multi-image compositing |
+| `seedream` | $0.04 | Multi-image compositing (up to 10 inputs), placing objects in scenes |
+| `banana2` | $0.08 | Better image preservation, >10 inputs, extreme aspect ratios, web search |
+| `banana-pro` | $0.15 | Premium. Best realism, typography, character consistency for up to 5 people |
+
+**How to pick the right model:**
+
+| Task | Best model | Cost | Why |
+|---|---|---|---|
+| Quick background/draft | `flux-schnell` | $0.003 | Fastest, cheapest |
+| Quality hero image | `flux-dev` or `imagineart` | $0.03 | Good balance of quality/cost |
+| Text-heavy generation | `recraft-v3` | $0.04 | Best text rendering in generated images |
+| Quick edit iteration | `reve-fast` | $0.02 | Half the price, good enough for drafts |
+| Single image edit (bg swap, add text) | `kontext` | $0.04 | Best targeted edits |
+| Compose multiple images into one scene | `seedream` | $0.04 | Handles up to 10 inputs |
+| Style transfer / product variations | `reve` | $0.04 | Context-aware transforms |
+| Precise masked edit (add/remove object) | `fibo-edit` | $0.04 | JSON + mask control |
+| Subject must stay very faithful | `banana2` | $0.08 | Best preservation |
+| Premium quality, complex scene | `banana-pro` | $0.15 | Best overall but expensive |
 
 **Background removal:**
 - `bria` (default) — Best edge quality, clean cutouts

@@ -3,7 +3,8 @@ import fs from "fs";
 import sharp from "sharp";
 import { log } from "./operations.ts";
 import {
-  getEndpoint,
+  getGenerateEndpoint,
+  getEditEndpoint,
   getCost,
   selectGenerateModel,
   selectEditModel,
@@ -40,7 +41,7 @@ export async function generate(opts: {
   verbose?: boolean;
 }): Promise<Buffer> {
   const model = selectGenerateModel(opts.model, opts.verbose);
-  const endpoint = getEndpoint(model);
+  const endpoint = getGenerateEndpoint(model);
   const cost = getCost(model);
 
   log(`FAL generate: ${model} @ $${cost.toFixed(3)}`);
@@ -48,11 +49,46 @@ export async function generate(opts: {
   const w = opts.width || 1200;
   const h = opts.height || 630;
 
-  const input: Record<string, unknown> = {
-    prompt: opts.prompt,
-    num_images: 1,
-    image_size: mapFluxSize(w, h),
-  };
+  let input: Record<string, unknown>;
+
+  if (model === "recraft-v3" || model === "recraft-v4") {
+    input = {
+      prompt: opts.prompt,
+      image_size: { width: w, height: h },
+    };
+  } else if (model === "imagineart") {
+    input = {
+      prompt: opts.prompt,
+      image_size: { width: Math.min(w, 2048), height: Math.min(h, 2048) },
+    };
+  } else if (model === "fibo") {
+    input = {
+      prompt: opts.prompt,
+      num_images: 1,
+      image_size: { width: w, height: h },
+    };
+  } else if (model === "seedream" || model === "seedream-v4") {
+    input = {
+      prompt: opts.prompt,
+      image_size: seedreamSize(w, h),
+      num_images: 1,
+    };
+  } else if (model === "banana2" || model === "banana-pro") {
+    input = {
+      prompt: opts.prompt,
+      aspect_ratio: mapAspectRatio(w, h),
+      resolution: mapResolution(w, h),
+      output_format: "png",
+      num_images: 1,
+    };
+  } else {
+    // flux-dev, flux-schnell
+    input = {
+      prompt: opts.prompt,
+      num_images: 1,
+      image_size: mapFluxSize(w, h),
+    };
+  }
 
   const result = await fal.subscribe(endpoint, {
     input,
@@ -80,7 +116,7 @@ export async function edit(opts: {
   verbose?: boolean;
 }): Promise<Buffer> {
   const model = selectEditModel(opts.inputUrls.length, opts.model, opts.verbose);
-  const endpoint = getEndpoint(model);
+  const endpoint = getEditEndpoint(model);
   const cost = getCost(model);
 
   log(`FAL edit: ${model} @ $${cost.toFixed(2)} | ${opts.inputUrls.length} input(s)`);
@@ -108,8 +144,32 @@ export async function edit(opts: {
       num_images: 1,
       limit_generations: true,
     };
+  } else if (model === "kontext" || model === "kontext-lora") {
+    input = {
+      prompt: opts.prompt,
+      image_url: opts.inputUrls[0],
+    };
+  } else if (model === "reve" || model === "reve-fast") {
+    input = {
+      prompt: opts.prompt,
+      image_url: opts.inputUrls[0],
+      num_images: 1,
+    };
+  } else if (model === "fibo-edit") {
+    input = {
+      prompt: opts.prompt,
+      image_url: opts.inputUrls[0],
+    };
+  } else if (model === "seedream-v4") {
+    input = {
+      prompt: opts.prompt,
+      image_urls: opts.inputUrls,
+      image_size: seedreamSize(w, h),
+      num_images: 1,
+      max_images: 1,
+    };
   } else {
-    // banana-pro — minimal params, let it auto-detect
+    // banana-pro — minimal params
     input = {
       prompt: opts.prompt,
       image_urls: opts.inputUrls,
