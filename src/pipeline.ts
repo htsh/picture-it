@@ -1,235 +1,228 @@
 import sharp from "sharp";
-import fs from "fs";
-import path from "path";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
+import path from "path";
+import fs from "fs";
+import { log, parseSize, ensureFalKey, writeOutput } from "./operations.ts";
+import { configureFal, generate, edit, removeBg, uploadFile, uploadBuffer, cropToExact } from "./fal.ts";
 import { composite } from "./compositor.ts";
-import { applyColorGrade, applyGrain, applyVignette, finalizeOutput } from "./postprocess.ts";
-import { checkAndFixContrast } from "./contrast.ts";
-import {
-  configureFal,
-  uploadToFal,
-  uploadBufferToFal,
-  generateImage,
-  removeBackground,
-  generateBlendLayer,
-  cropToExact,
-} from "./fal.ts";
+import { applyColorGrade, applyGrain, applyVignette } from "./postprocess.ts";
 import { loadFonts } from "./fonts.ts";
-import { jsxToReact } from "./satori-jsx.ts";
-import type { CompositionPlan, Overlay, SatoriPreRender } from "./types.ts";
+import type { PipelineStep, Overlay } from "./types.ts";
 
-function log(msg: string) {
-  process.stderr.write(`[picture-it] ${msg}\n`);
+export async function executePipeline(
+  steps: PipelineStep[],
+  outputPath: string,
+  verbose = false
+): Promise<string> {
+  let buffer: Buffer | null = null;
+  const falKey = ensureFalKey();
+  configureFal(falKey);
+
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i]!;
+    if (verbose) log(`Pipeline step ${i + 1}/${steps.length}: ${step.op}`);
+
+    switch (step.op) {
+      case "generate": {
+        const { width, height } = parseSize(step.size, step.platform);
+        buffer = await generate({
+          prompt: step.prompt,
+          model: step.model,
+          width,
+          height,
+          verbose,
+        });
+        buffer = await cropToExact(buffer, width, height);
+        break;
+      }
+
+      case "edit": {
+        if (!buffer && (!step.assets || step.assets.length === 0)) {
+          throw new Error("Edit step requires input buffer or assets");
+        }
+        const urls: string[] = [];
+        if (buffer) {
+          urls.push(await uploadBuffer(buffer, "input.png"));
+        }
+        if (step.assets) {
+          for (const asset of step.assets) {
+            urls.push(await uploadFile(path.resolve(asset)));
+          }
+        }
+        const size = step.size ? parseSize(step.size) : buffer ? await getBufferSize(buffer) : { width: 1200, height: 630 };
+        buffer = await edit({
+          inputUrls: urls,
+          prompt: step.prompt,
+          model: step.model,
+          width: size.width,
+          height: size.height,
+          verbose,
+        });
+        buffer = await cropToExact(buffer, size.width, size.height);
+        break;
+      }
+
+      case "remove-bg": {
+        if (!buffer) throw new Error("remove-bg requires input");
+        const url = await uploadBuffer(buffer, "input.png");
+        buffer = await removeBg({ inputUrl: url, verbose });
+        break;
+      }
+
+      case "replace-bg": {
+        if (!buffer) throw new Error("replace-bg requires input");
+        // Remove bg from current buffer
+        const cutoutUrl = await uploadBuffer(buffer, "input.png");
+        const cutout = await removeBg({ inputUrl: cutoutUrl, verbose });
+        // Generate new background
+        const size = await getBufferSize(buffer);
+        const bg = await generate({
+          prompt: step.prompt,
+          model: step.model,
+          width: size.width,
+          height: size.height,
+          verbose,
+        });
+        const bgCropped = await cropToExact(bg, size.width, size.height);
+        // Composite cutout onto new bg
+        buffer = await sharp(bgCropped)
+          .composite([{ input: cutout, blend: "over" }])
+          .png()
+          .toBuffer();
+        break;
+      }
+
+      case "crop": {
+        if (!buffer) throw new Error("crop requires input");
+        const { width, height } = parseSize(step.size);
+        const pos = (step.position || "attention") as any;
+        buffer = await cropToExact(buffer, width, height, pos);
+        break;
+      }
+
+      case "grade": {
+        if (!buffer) throw new Error("grade requires input");
+        buffer = await applyColorGrade(buffer, step.name);
+        break;
+      }
+
+      case "grain": {
+        if (!buffer) throw new Error("grain requires input");
+        buffer = await applyGrain(buffer, step.intensity);
+        break;
+      }
+
+      case "vignette": {
+        if (!buffer) throw new Error("vignette requires input");
+        buffer = await applyVignette(buffer, step.opacity);
+        break;
+      }
+
+      case "text": {
+        if (!buffer) throw new Error("text requires input");
+        buffer = await renderTextOnto(buffer, step);
+        break;
+      }
+
+      case "compose": {
+        if (!buffer) throw new Error("compose requires input");
+        let overlays: Overlay[];
+        if (typeof step.overlays === "string") {
+          overlays = JSON.parse(fs.readFileSync(path.resolve(step.overlays), "utf-8"));
+        } else {
+          overlays = step.overlays;
+        }
+        const size = await getBufferSize(buffer);
+        buffer = await composite(buffer, overlays, size.width, size.height, process.cwd(), verbose);
+        break;
+      }
+
+      case "upscale": {
+        if (!buffer) throw new Error("upscale requires input");
+        const { upscale: upscaleFn } = await import("./fal.ts");
+        const url = await uploadBuffer(buffer, "input.png");
+        buffer = await upscaleFn({ inputUrl: url, scale: step.scale, verbose });
+        break;
+      }
+    }
+  }
+
+  if (!buffer) throw new Error("Pipeline produced no output");
+
+  const finalPath = await writeOutput(buffer, outputPath);
+  return finalPath;
 }
 
-export async function executePipeline(opts: {
-  plan: CompositionPlan;
-  assetDir: string;
-  outputPath: string;
-  falKey?: string;
-  verbose?: boolean;
-}): Promise<string> {
-  const { plan, assetDir, outputPath, verbose } = opts;
-  const { width, height } = plan;
+async function getBufferSize(buffer: Buffer): Promise<{ width: number; height: number }> {
+  const meta = await sharp(buffer).metadata();
+  return { width: meta.width || 1200, height: meta.height || 630 };
+}
 
-  // STAGE 1.5: Satori pre-renders for satori-to-fal text
-  let preRenderedPngs: { buffer: Buffer; figureNumber: number; id: string }[] = [];
-  if (plan.satoriPreRenders && plan.satoriPreRenders.length > 0) {
-    if (verbose) log("Stage 1.5: Pre-rendering text for FAL...");
-    preRenderedPngs = await renderPreTexts(plan.satoriPreRenders);
-  }
+async function renderTextOnto(
+  buffer: Buffer,
+  step: { title: string; font?: string; color?: string; fontSize?: number; zone?: string }
+): Promise<Buffer> {
+  const meta = await sharp(buffer).metadata();
+  const w = meta.width || 1200;
+  const h = meta.height || 630;
+  const fonts = await loadFonts();
 
-  // Ensure plan fields exist with defaults
-  if (!plan.overlays) plan.overlays = [];
-  if (!plan.falStep) {
-    plan.falStep = {
-      model: "seedream",
-      prompt: "",
-      sizeStrategy: { width, height },
-      skip: true,
-      fallbackBg: "linear-gradient(135deg, #1a1a2e 0%, #0f0f23 100%)",
-    };
-  }
+  const fontSize = step.fontSize || 64;
+  const fontFamily = step.font || "Space Grotesk";
+  const color = step.color || "white";
 
-  // STAGE 2: FAL generation
-  let baseBuffer: Buffer;
+  const jsx = {
+    type: "div",
+    props: {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "100%",
+        height: "100%",
+      },
+      children: {
+        type: "span",
+        props: {
+          style: {
+            fontSize,
+            fontFamily,
+            fontWeight: 700,
+            color,
+            textShadow: "0 2px 10px rgba(0,0,0,0.5)",
+            textAlign: "center",
+          },
+          children: step.title,
+        },
+      },
+    },
+  };
 
-  if (plan.falStep.skip) {
-    if (verbose) log("Stage 2: Skipping FAL (creating gradient background)...");
-    baseBuffer = await createGradientBackground(
-      plan.falStep.fallbackBg || "linear-gradient(135deg, #1a1a2e 0%, #0f0f23 100%)",
-      width,
-      height
-    );
-  } else if (opts.falKey) {
-    if (verbose) log("Stage 2: Generating image with FAL...");
-    configureFal(opts.falKey);
+  const textW = Math.round(w * 0.9);
+  const textH = Math.round(h * 0.3);
 
-    // Upload assets in parallel
-    const inputImages = plan.falStep.inputImages || [];
-    const uploadPromises: Promise<string>[] = [];
+  const svg = await satori(jsx as any, { width: textW, height: textH, fonts });
+  const resvg = new Resvg(svg, { fitTo: { mode: "width", value: textW } });
+  const textPng = Buffer.from(resvg.render().asPng());
 
-    for (const img of inputImages) {
-      const imgPath = path.resolve(assetDir, img);
-      if (fs.existsSync(imgPath)) {
-        uploadPromises.push(uploadToFal(imgPath));
-      }
-    }
-
-    // Upload pre-rendered text PNGs
-    for (const pre of preRenderedPngs) {
-      uploadPromises.push(
-        uploadBufferToFal(pre.buffer, `pre-render-${pre.id}.png`)
-      );
-    }
-
-    const uploadedUrls = await Promise.all(uploadPromises);
-
-    // Background removal
-    if (plan.falStep.removeBackgrounds && plan.falStep.removeBackgrounds.length > 0) {
-      if (verbose) log("Removing backgrounds...");
-      for (const assetName of plan.falStep.removeBackgrounds) {
-        const idx = inputImages.indexOf(assetName);
-        if (idx >= 0 && uploadedUrls[idx]) {
-          const cleanBuf = await removeBackground(uploadedUrls[idx]!, verbose);
-          // Re-upload the cleaned version
-          uploadedUrls[idx] = await uploadBufferToFal(cleanBuf, `clean-${assetName}`);
-        }
-      }
-    }
-
-    // Generate base image
-    try {
-      baseBuffer = await generateImage(plan.falStep, uploadedUrls, verbose);
-
-      // Blend layers (parallel with nothing since base is done)
-      if (plan.blendLayers && plan.blendLayers.length > 0) {
-        if (verbose) log("Generating blend layers...");
-        const blendResults = await Promise.all(
-          plan.blendLayers.map((bl) =>
-            generateBlendLayer(bl, plan.falStep.model, width, height, verbose)
-          )
-        );
-
-        // Composite blend layers
-        let baseSharp = sharp(baseBuffer);
-        for (let i = 0; i < blendResults.length; i++) {
-          const bl = plan.blendLayers[i]!;
-          const blendBuf = await cropToExact(blendResults[i]!, width, height);
-
-          // Apply opacity
-          const { data, info } = await sharp(blendBuf)
-            .ensureAlpha()
-            .raw()
-            .toBuffer({ resolveWithObject: true });
-
-          for (let j = 3; j < data.length; j += 4) {
-            data[j] = Math.round(data[j]! * bl.opacity);
-          }
-
-          const opacBuf = await sharp(data, {
-            raw: { width: info.width, height: info.height, channels: 4 },
-          }).png().toBuffer();
-
-          const blendMode = bl.blend === "normal" ? "over" : bl.blend;
-          baseSharp = sharp(
-            await baseSharp
-              .composite([{ input: opacBuf, blend: blendMode as any }])
-              .png()
-              .toBuffer()
-          );
-        }
-        baseBuffer = await baseSharp.png().toBuffer();
-      }
-
-      // Crop to exact dimensions
-      baseBuffer = await cropToExact(
-        baseBuffer,
-        width,
-        height,
-        plan.falStep.focalPoint
-      );
-    } catch (e) {
-      log(`FAL generation failed: ${(e as Error).message}`);
-      log("Falling back to gradient background...");
-      baseBuffer = await createGradientBackground(
-        plan.falStep.fallbackBg || "linear-gradient(135deg, #1a1a2e 0%, #0f0f23 100%)",
-        width,
-        height
-      );
-    }
-  } else {
-    // No FAL key, use gradient
-    if (verbose) log("No FAL key, creating gradient background...");
-    baseBuffer = await createGradientBackground(
-      plan.falStep.fallbackBg || "linear-gradient(135deg, #1a1a2e 0%, #0f0f23 100%)",
-      width,
-      height
-    );
-  }
-
-  // STAGE 3: Contrast safety check
-  if (verbose) log("Stage 3: Checking contrast...");
-  const fixedOverlays = await checkAndFixContrast(
-    baseBuffer,
-    plan.overlays,
-    width,
-    height
+  // Position based on zone
+  const { resolvePosition } = await import("./zones.ts");
+  const { ZONES } = await import("./types.ts");
+  const zoneName = step.zone || "hero-center";
+  const pos = resolvePosition(
+    zoneName as any,
+    w, h, textW, textH, "center"
   );
 
-  // STAGE 4: Overlay compositing
-  if (verbose) log("Stage 4: Compositing overlays...");
-  const compositedPlan: CompositionPlan = {
-    ...plan,
-    overlays: fixedOverlays,
-  };
-  let result = await composite(compositedPlan, baseBuffer, assetDir, verbose);
-
-  // STAGE 5: Post-processing
-  if (verbose) log("Stage 5: Post-processing...");
-
-  if (plan.colorGrade) {
-    result = await applyColorGrade(result, plan.colorGrade);
-  }
-
-  if (plan.grain) {
-    result = await applyGrain(result);
-  }
-
-  if (plan.vignette) {
-    result = await applyVignette(result);
-  }
-
-  // Write output
-  await finalizeOutput(result, outputPath);
-
-  if (verbose) log(`Output: ${outputPath}`);
-  return outputPath;
+  return sharp(buffer)
+    .composite([{ input: textPng, left: Math.max(0, pos.x), top: Math.max(0, pos.y), blend: "over" }])
+    .png()
+    .toBuffer();
 }
 
-async function renderPreTexts(
-  preRenders: SatoriPreRender[]
-): Promise<{ buffer: Buffer; figureNumber: number; id: string }[]> {
-  const fonts = await loadFonts();
-  const results: { buffer: Buffer; figureNumber: number; id: string }[] = [];
-
-  for (const pre of preRenders) {
-    const reactElement = jsxToReact(pre.jsx);
-    const svg = await satori(reactElement, {
-      width: pre.width,
-      height: pre.height,
-      fonts,
-    });
-    const resvg = new Resvg(svg, { fitTo: { mode: "width", value: pre.width } });
-    const pngBuffer = Buffer.from(resvg.render().asPng());
-    results.push({ buffer: pngBuffer, figureNumber: pre.figureNumber, id: pre.id });
-  }
-
-  return results;
-}
-
-async function createGradientBackground(
+// Gradient background helper (used by templates)
+export async function createGradientBackground(
   gradient: string,
   width: number,
   height: number
@@ -239,12 +232,7 @@ async function createGradientBackground(
   const jsx = {
     type: "div",
     props: {
-      style: {
-        width,
-        height,
-        backgroundImage: gradient,
-        display: "flex",
-      },
+      style: { width, height, backgroundImage: gradient, display: "flex" },
       children: [],
     },
   };
@@ -253,5 +241,3 @@ async function createGradientBackground(
   const resvg = new Resvg(svg, { fitTo: { mode: "width", value: width } });
   return Buffer.from(resvg.render().asPng());
 }
-
-export { createGradientBackground };

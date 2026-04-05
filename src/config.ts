@@ -1,6 +1,5 @@
 import fs from "fs";
 import path from "path";
-import { config as loadDotenv } from "dotenv";
 import type { PictureItConfig } from "./types.ts";
 
 const CONFIG_DIR = path.join(
@@ -26,15 +25,9 @@ function saveConfigFile(config: PictureItConfig): void {
 }
 
 export function getConfig(): PictureItConfig {
-  // Load .env from current directory
-  loadDotenv();
-
   const file = loadConfigFile();
-  const env = process.env;
-
   return {
-    fal_key: env["FAL_KEY"] || file.fal_key,
-    anthropic_api_key: env["ANTHROPIC_API_KEY"] || file.anthropic_api_key,
+    fal_key: process.env["FAL_KEY"] || file.fal_key,
     default_model: file.default_model,
     default_platform: file.default_platform,
     default_grade: file.default_grade,
@@ -72,7 +65,6 @@ export function maskKey(key: string): string {
 export function getKeySource(
   key: "fal_key" | "anthropic_api_key"
 ): { value: string; source: string } | null {
-  loadDotenv();
 
   const envKey = key === "fal_key" ? "FAL_KEY" : "ANTHROPIC_API_KEY";
   if (process.env[envKey]) {

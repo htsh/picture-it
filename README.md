@@ -2,182 +2,210 @@
 
 ![picture-it hero](hero.png)
 
-A CLI tool for AI agents to generate production-quality images. Uses FAL AI models for creative image generation and editing, Satori for pixel-perfect text rendering, and Sharp for compositing and post-processing.
+Photoshop for AI agents. Composable image operations from the CLI.
+
+Each command takes an image in, does one thing, and outputs an image. Chain them together to build any visual.
 
 ## Setup
 
 ```bash
 bun install
 bun run download-fonts
+picture-it auth --fal <your-fal-key>
 ```
-
-Configure API keys (needed for `create` and `--review`):
-
-```bash
-bun run index.ts auth --fal <your-fal-key>
-bun run index.ts auth --anthropic <your-anthropic-key>
-bun run index.ts auth --status
-```
-
-Keys resolve in order: env vars > `~/.picture-it/config.json` > `.env`
 
 ## Commands
 
+### edit — The primary command
+
+Edit any image with a natural language prompt. Uses FAL AI edit models.
+
+```bash
+# Change a background
+picture-it edit -i photo.jpg --prompt "replace background with modern hotel entrance" -o edited.jpg
+
+# Composite logos into a scene
+picture-it edit -i scene.png -i logo.png --prompt "place Figure 2 as a glowing 3D object in the center" -o hero.png
+
+# Multi-image composition
+picture-it edit -i bg.png -i logo1.png -i logo2.png \
+  --prompt "Place Figure 2 on left and Figure 3 on right in a dramatic VS layout" \
+  --model banana-pro -o comparison.png
+```
+
+### generate — Create from scratch
+
+```bash
+picture-it generate --prompt "dark stage with green spotlight, cinematic" --size 1200x630 -o bg.png
+picture-it generate --prompt "abstract gradient mesh" --platform instagram-square -o mesh.png
+```
+
+### remove-bg / replace-bg
+
+```bash
+picture-it remove-bg -i product.jpg -o cutout.png
+picture-it replace-bg -i photo.jpg --prompt "standing in front of a luxury hotel" -o new.jpg
+```
+
+### crop
+
+```bash
+picture-it crop -i photo.png --size 1080x1080 --position center -o square.png
+picture-it crop -i wide.png --size 1200x630 --position attention -o blog.png
+```
+
+### grade / grain / vignette
+
+```bash
+picture-it grade -i photo.png --name cinematic -o graded.png
+picture-it grain -i photo.png --intensity 0.05 -o grained.png
+picture-it vignette -i photo.png --opacity 0.4 -o vignetted.png
+```
+
+### text — Render text with Satori
+
+```bash
+# Simple mode
+picture-it text -i bg.png --title "Ship Faster" --font "Space Grotesk" --color white --font-size 72 -o hero.png
+
+# Advanced mode with JSX layout
+picture-it text -i bg.png --jsx overlays.json -o hero.png
+```
+
+### compose — Overlay compositing
+
+```bash
+picture-it compose -i background.png --overlays overlays.json -o result.png
+```
+
 ### template — No AI, instant output
 
-Built-in templates that use Satori + Sharp only. No API keys needed.
-
 ```bash
-# Text hero
-bun run index.ts template text-hero \
-  --title "Ship Faster" \
-  --subtitle "With AI-powered tooling" \
-  --badge "NEW" \
-  --output hero.png
-
-# VS comparison
-bun run index.ts template vs-comparison \
-  --left-logo hype.png \
-  --right-logo competitor.png \
-  --left-label "Hype" \
-  --right-label "Other" \
-  --glow-color "#7c3aed" \
-  --output comparison.png
-
-# Feature hero with logo
-bun run index.ts template feature-hero \
-  --logo icon.png \
-  --title "Feature X" \
-  --subtitle "Now available" \
-  --glow-color "#3b82f6" \
-  --output feature.png
-
-# Social card
-bun run index.ts template social-card \
-  --title "Building AI-Powered CLIs" \
-  --description "How we built it" \
-  --site-name "example.com" \
-  --author-name "Jane" \
-  --output social.png
+picture-it template text-hero --title "Hello World" --subtitle "Built with picture-it" -o hero.png
+picture-it template vs-comparison --left-logo a.png --right-logo b.png -o vs.png
+picture-it template social-card --title "My Post" --site-name "example.com" -o card.png
+picture-it template feature-hero --logo icon.png --title "Feature X" --glow-color "#3b82f6" -o feature.png
 ```
 
-### create — AI-planned composition
+### pipeline — Multi-step operations
 
-Claude plans the layout, FAL generates backgrounds, Sharp composites everything.
-
-```bash
-bun run index.ts create \
-  --prompt "Dark tech blog header showing Hype vs competitor" \
-  --assets hype-logo.png competitor-logo.png \
-  --preset dark-tech \
-  --platform blog-featured \
-  --output header.png \
-  --review \
-  --verbose
-```
-
-### compose — Manual overlay compositing
-
-Composite overlays from a JSON file onto a background image.
+Chain operations in a JSON spec. Each step feeds into the next.
 
 ```bash
-bun run index.ts compose \
-  --bg background.png \
-  --overlays overlays.json \
-  --size 1200x630 \
-  --output result.png
+picture-it pipeline --spec steps.json -o final.png
 ```
 
-### batch — Multi-image generation
+```json
+[
+  { "op": "generate", "prompt": "dark stage with green spotlight", "size": "1200x630" },
+  { "op": "edit", "prompt": "place Figure 1 as a glowing cube in the spotlight", "assets": ["logo.png"] },
+  { "op": "crop", "size": "1200x630" },
+  { "op": "grade", "name": "cinematic" },
+  { "op": "vignette" }
+]
+```
+
+### batch — Multiple pipelines
 
 ```bash
-bun run index.ts batch \
-  --spec images.json \
-  --output-dir ./blog-images/
+picture-it batch --spec batch.json --output-dir ./images/
 ```
 
-## Flags
+```json
+[
+  {
+    "id": "hero",
+    "pipeline": [
+      { "op": "generate", "prompt": "abstract dark background", "size": "1200x630" },
+      { "op": "grade", "name": "cinematic" }
+    ]
+  },
+  {
+    "id": "card",
+    "pipeline": [
+      { "op": "generate", "prompt": "gradient mesh", "size": "1200x630" },
+      { "op": "text", "title": "My Title", "fontSize": 64 }
+    ]
+  }
+]
+```
 
-| Flag | Description |
-|---|---|
-| `--prompt` | Natural language description (required for create) |
-| `--assets` | Input images (logos, screenshots, icons) |
-| `--style` | Comma-separated style keywords |
-| `--preset` | Style preset: `dark-tech`, `minimal-light`, `gradient-mesh`, `editorial`, `glassmorphism` |
-| `--platform` | Platform preset (sets size + safe zones) |
-| `--size` | Output dimensions, e.g. `1200x630` |
-| `--output` | Output file path (extension sets format: png/jpg/webp) |
-| `--model` | FAL model: `seedream` ($0.04), `banana2` ($0.08), `banana-pro` ($0.15) |
-| `--grade` | Color grade: `cinematic`, `moody`, `vibrant`, `clean`, `warm-editorial`, `cool-tech` |
-| `--grain` | Add film grain |
-| `--vignette` | Add edge vignette |
-| `--remove-bg` | Remove backgrounds from all assets via birefnet |
-| `--review` | Enable Claude Vision self-review loop (max 2 retries) |
-| `--no-fal` | Skip FAL, use gradient background |
-| `--bg` | Pre-made background image (skips FAL) |
-| `--verbose` | Detailed progress to stderr |
+### info — Analyze an image
+
+```bash
+picture-it info -i photo.png
+```
+
+Outputs JSON: dimensions, format, transparency, dominant colors, content type guess.
+
+### upscale
+
+```bash
+picture-it upscale -i small.png --scale 2 -o large.png
+```
+
+## Model routing
+
+The tool automatically picks the cheapest model that can handle the job:
+
+| Operation | Default model | Cost |
+|---|---|---|
+| `generate` | flux-schnell | $0.003 |
+| `edit` (1-10 images) | seedream | $0.04 |
+| `edit` (>10 images) | banana2 | $0.08 |
+| `edit --model banana-pro` | banana-pro | $0.15 |
+| `remove-bg` | birefnet | — |
+
+Override with `--model <name>` on any command.
 
 ## Platform presets
 
-| Preset | Size | Notes |
-|---|---|---|
-| `blog-featured` | 1200x630 | Default |
-| `blog-inline` | 800x450 | |
-| `og-image` | 1200x630 | Key content in center 1000x500 |
-| `twitter-header` | 1500x500 | Center 60% safe |
-| `instagram-square` | 1080x1080 | |
-| `instagram-story` | 1080x1920 | |
-| `linkedin-post` | 1200x627 | |
-| `youtube-thumbnail` | 1280x720 | Avoid bottom-right 20% |
-| `shopify-app-listing` | 1200x628 | |
+Use `--platform <name>` on `generate`, `crop`, or `template`:
+
+| Preset | Size |
+|---|---|
+| `blog-featured` | 1200x630 |
+| `og-image` | 1200x630 |
+| `twitter-header` | 1500x500 |
+| `instagram-square` | 1080x1080 |
+| `instagram-story` | 1080x1920 |
+| `youtube-thumbnail` | 1280x720 |
+| `linkedin-post` | 1200x627 |
 
 ## Output behavior
 
-- **stdout**: only the output file path (or JSON array for batch)
-- **stderr**: progress logs, warnings, review scores
+- **stdout**: only the output file path (or JSON for batch)
+- **stderr**: progress logs and warnings
 - **Exit 0** on success, **Exit 1** on failure
 
-This makes it easy for AI agents to consume: read stdout for the file path, ignore stderr.
+## Example workflows
 
-## Architecture
+### Blog hero with AI background
 
-```
-User prompt
-  ↓
-Stage 0: Asset Analysis (Sharp — palette, transparency, content type)
-  ↓
-Stage 1: Planner (Claude Sonnet — JSON composition plan)
-  ↓
-Stage 1.5: Satori Pre-Render (text PNGs for FAL scene integration)
-  ↓
-Stage 2: FAL Generation (SeedDream/Banana/Flux — background + scene)
-  ↓
-Stage 3: Contrast Safety Check (auto-inject gradient overlays for readability)
-  ↓
-Stage 4: Overlay Compositing (Sharp — images, Satori text, shapes, watermarks)
-  ↓
-Stage 5: Post-Processing (color grade, grain, vignette)
-  ↓
-Stage 6: Review (Claude Vision — score + corrections, max 2 retries)
-  ↓
-Final image on disk
+```bash
+picture-it generate --prompt "dark cosmic background with subtle nebula" --size 1200x630 -o bg.png
+picture-it edit -i bg.png -i logo.png --prompt "place Figure 2 as a large glowing element in center" --model seedream -o hero.png
+picture-it grade -i hero.png --name cinematic -o hero-graded.png
+picture-it vignette -i hero-graded.png -o final.png
 ```
 
-## Text rendering strategies
+### Instagram photo edit
 
-The planner picks per text element:
+```bash
+picture-it edit -i photo.jpg --prompt "replace background with luxury hotel entrance, keep subject identical" --model banana-pro -o edited.jpg
+picture-it crop -i edited.jpg --size 1080x1080 --position center -o square.jpg
+```
 
-- **satori-to-fal**: Satori pre-renders text as PNG, FAL integrates it into the scene with natural lighting. Best for hero titles.
-- **fal-direct**: Text instructions in FAL prompt only. Cheapest, works for short simple words.
-- **satori-overlay**: Satori renders, Sharp composites flat on top. Pixel-perfect for UI text, watermarks, captions.
+### Product shot
+
+```bash
+picture-it remove-bg -i product.jpg -o cutout.png
+picture-it replace-bg -i product.jpg --prompt "clean white studio background with soft shadows" -o studio.png
+```
 
 ## Dependencies
 
-- **Bun** — runtime
-- **Commander.js** — CLI
-- **Sharp** — image compositing, resizing, effects, post-processing
-- **Satori** — JSX-to-SVG text rendering
-- **@resvg/resvg-js** — SVG-to-PNG conversion
+- **Sharp** — image processing, compositing, post-processing
+- **Satori** + **resvg-js** — text rendering (JSX → SVG → PNG)
 - **@fal-ai/client** — AI image generation and editing
-- **@anthropic-ai/sdk** — AI planner and vision reviewer
-- **dotenv** — .env file support
+- **Commander.js** — CLI framework

@@ -1,6 +1,4 @@
-// Core types for picture-it
-
-export type TextRenderer = "satori-to-fal" | "fal-direct" | "satori-overlay";
+// Core types for picture-it v2 — composable operations architecture
 
 export type FalModel =
   | "seedream"
@@ -24,56 +22,28 @@ export type DepthLayer =
   | "overlay"
   | "frame";
 
-export type BlendMode =
-  | "normal"
-  | "multiply"
-  | "screen"
-  | "overlay";
+export type BlendMode = "normal" | "multiply" | "screen" | "overlay";
 
-export type MaskShape =
-  | "circle"
-  | "rounded"
-  | "hexagon"
-  | "diamond"
-  | "blob"
-  | string; // custom SVG path
+export type MaskShape = "circle" | "rounded" | "hexagon" | "diamond" | "blob" | string;
 
 export type DeviceFrame = "iphone" | "macbook" | "browser" | "ipad";
 
-export type AnchorPosition =
-  | "center"
-  | "top-left"
-  | "top-right"
-  | "bottom-left"
-  | "bottom-right";
+export type AnchorPosition = "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
 export type CropPosition =
-  | "attention"
-  | "entropy"
-  | "center"
-  | "top"
-  | "bottom"
-  | "left"
-  | "right"
+  | "attention" | "entropy" | "center"
+  | "top" | "bottom" | "left" | "right"
   | { left: number; top: number };
 
 export type ZoneName =
-  | "hero-center"
-  | "title-area"
-  | "top-bar"
-  | "bottom-bar"
-  | "left-third"
-  | "right-third"
-  | "top-left-safe"
-  | "top-right-safe"
-  | "bottom-left-safe"
-  | "bottom-right-safe"
-  | "center-left"
-  | "center-right";
+  | "hero-center" | "title-area" | "top-bar" | "bottom-bar"
+  | "left-third" | "right-third"
+  | "top-left-safe" | "top-right-safe" | "bottom-left-safe" | "bottom-right-safe"
+  | "center-left" | "center-right";
 
 export interface Zone {
-  x: number; // percentage 0-100
-  y: number; // percentage 0-100
+  x: number;
+  y: number;
 }
 
 export const ZONES: Record<ZoneName, Zone> = {
@@ -91,7 +61,7 @@ export const ZONES: Record<ZoneName, Zone> = {
   "center-right": { x: 70, y: 50 },
 };
 
-// Overlay types
+// --- Overlay types (used by compose/text commands) ---
 
 export interface ShadowConfig {
   blur: number;
@@ -109,14 +79,14 @@ export interface GlowConfig {
 
 export interface ReflectionConfig {
   opacity: number;
-  fadeHeight: number; // percentage 0-100
+  fadeHeight: number;
 }
 
 export interface ImageOverlay {
   type: "image";
   src: string;
   zone?: ZoneName | { x: number; y: number };
-  width?: number | string; // pixels or "50%"
+  width?: number | string;
   height?: number | string;
   anchor?: AnchorPosition;
   opacity?: number;
@@ -152,7 +122,6 @@ export interface ShapeOverlay {
   strokeWidth?: number;
   borderRadius?: number;
   opacity?: number;
-  // Arrow-specific
   from?: { x: number; y: number };
   to?: { x: number; y: number };
   headSize?: number;
@@ -162,7 +131,7 @@ export interface ShapeOverlay {
 
 export interface GradientOverlay {
   type: "gradient-overlay";
-  gradient: string; // CSS gradient string
+  gradient: string;
   opacity?: number;
   blend?: BlendMode;
   depth?: DepthLayer;
@@ -185,74 +154,38 @@ export type Overlay =
   | GradientOverlay
   | WatermarkOverlay;
 
-// Satori JSX tree (simplified representation for JSON plans)
 export interface SatoriJSX {
   tag: string;
   props?: Record<string, unknown>;
   children?: (SatoriJSX | string)[];
 }
 
-// FAL step in the plan
-export interface FalStep {
-  model: FalModel;
-  prompt: string;
-  inputImages?: string[];
-  textInScene?: string[];
-  removeBackgrounds?: string[];
-  resolution?: "0.5K" | "1K" | "2K" | "4K";
-  sizeStrategy:
-    | { width: number; height: number }
-    | { aspectRatio: string; resolution: string };
-  focalPoint?: CropPosition;
-  skip?: boolean;
-  fallbackBg?: string;
-  estimatedCost?: string;
-  reasoning?: string;
-  thinkingLevel?: "minimal" | "high";
-  webSearch?: boolean;
+// --- Pipeline types ---
+
+export type PipelineStep =
+  | { op: "generate"; prompt: string; model?: FalModel; size?: string; platform?: string }
+  | { op: "edit"; prompt: string; model?: FalModel; assets?: string[]; size?: string }
+  | { op: "remove-bg" }
+  | { op: "replace-bg"; prompt: string; model?: FalModel }
+  | { op: "crop"; size: string; position?: string }
+  | { op: "grade"; name: ColorGrade }
+  | { op: "grain"; intensity?: number }
+  | { op: "vignette"; opacity?: number }
+  | { op: "text"; title: string; font?: string; color?: string; fontSize?: number; zone?: string }
+  | { op: "compose"; overlays: string | Overlay[] }
+  | { op: "upscale"; scale?: number };
+
+// --- Config ---
+
+export interface PictureItConfig {
+  fal_key?: string;
+  default_model?: FalModel;
+  default_platform?: string;
+  default_grade?: ColorGrade;
 }
 
-export interface BlendLayer {
-  prompt: string;
-  aspectRatio?: string;
-  opacity: number;
-  blend: BlendMode;
-}
+// --- Platform/style presets ---
 
-// The full composition plan (output of planner)
-export interface CompositionPlan {
-  width: number;
-  height: number;
-  falStep: FalStep;
-  blendLayers?: BlendLayer[];
-  overlays: Overlay[];
-  colorGrade?: ColorGrade;
-  grain?: boolean;
-  vignette?: boolean;
-  satoriPreRenders?: SatoriPreRender[];
-}
-
-export interface SatoriPreRender {
-  id: string;
-  jsx: SatoriJSX;
-  width: number;
-  height: number;
-  figureNumber: number;
-}
-
-// Asset analysis result
-export interface AssetAnalysis {
-  path: string;
-  filename: string;
-  width: number;
-  height: number;
-  aspectRatio: number;
-  hasTransparency: boolean;
-  dominantColors: string[];
-  contentType: "icon" | "logo" | "screenshot" | "avatar" | "cutout" | "photo";
-}
-
-// Platform presets
 export interface PlatformPreset {
   width: number;
   height: number;
@@ -262,7 +195,6 @@ export interface PlatformPreset {
   notes?: string;
 }
 
-// Style presets
 export interface StylePreset {
   falPromptStyle: string;
   font: string;
@@ -270,44 +202,25 @@ export interface StylePreset {
   glowDefault?: string;
 }
 
-// Config
-export interface PictureItConfig {
-  fal_key?: string;
-  anthropic_api_key?: string;
-  default_model?: FalModel;
-  default_platform?: string;
-  default_grade?: ColorGrade;
+// --- Asset info ---
+
+export interface ImageInfo {
+  path: string;
+  filename: string;
+  width: number;
+  height: number;
+  aspectRatio: number;
+  hasTransparency: boolean;
+  dominantColors: string[];
+  contentType: "icon" | "logo" | "screenshot" | "avatar" | "cutout" | "photo";
+  format: string;
+  sizeBytes: number;
 }
 
-// Review result
-export interface ReviewResult {
-  score: number;
-  composition: number;
-  textReadability: number;
-  assetPlacement: number;
-  colorHarmony: number;
-  overallQuality: number;
-  falTextAccuracy: number;
-  corrections?: {
-    correctedOverlays?: Overlay[];
-    retryFal?: boolean;
-    correctedFalPrompt?: string;
-    modelUpgrade?: FalModel;
-  };
-}
+// --- Batch ---
 
-// Batch spec entry
 export interface BatchEntry {
   id: string;
-  mode: "create" | "template" | "compose";
-  prompt?: string;
-  assets?: string[];
-  platform?: string;
-  style?: string;
-  template?: string;
-  templateData?: Record<string, unknown>;
-  bg?: string;
-  overlays?: Overlay[];
-  size?: string;
+  pipeline: PipelineStep[];
   output?: string;
 }

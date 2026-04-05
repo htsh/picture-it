@@ -13,27 +13,23 @@ import type {
   ShapeOverlay,
   GradientOverlay,
   WatermarkOverlay,
-  CompositionPlan,
   DepthLayer,
   ShadowConfig,
 } from "./types.ts";
-
-function log(msg: string) {
-  process.stderr.write(`[picture-it] ${msg}\n`);
-}
+import { log } from "./operations.ts";
 
 export async function composite(
-  plan: CompositionPlan,
   baseImage: Buffer,
+  overlays: Overlay[],
+  width: number,
+  height: number,
   assetDir: string,
   verbose = false
 ): Promise<Buffer> {
-  const { width, height, overlays } = plan;
-  let canvas = sharp(baseImage).resize(width, height, {
-    fit: "cover",
-    position: "center",
-  });
-  let canvasBuffer = await canvas.png().toBuffer();
+  let canvasBuffer = await sharp(baseImage)
+    .resize(width, height, { fit: "cover", position: "center" })
+    .png()
+    .toBuffer();
 
   // Sort overlays by depth
   const sorted = [...overlays].sort((a, b) => {
