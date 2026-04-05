@@ -1,6 +1,6 @@
 # picture-it
 
-![picture-it hero](hero.png)
+![picture-it hero](hero-v2.png)
 
 Photoshop for AI agents. Composable image operations from the CLI.
 
