@@ -263,7 +263,7 @@ picture-it replace-bg -i product.jpg --prompt "clean white studio background wit
 - **@fal-ai/client** — AI image generation and editing
 - **Commander.js** — CLI framework
 
-## Claude Skill
+## Claude, Openclaw, Hermes Skill
 
 picture-it includes a Claude skill so AI agents know how to use it effectively — which models to pick, how to chain operations, composition techniques, and gotchas.
 
