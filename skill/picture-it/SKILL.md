@@ -67,6 +67,53 @@ Note: User images are uploaded to fal.ai for AI processing when using generate, 
 
 Every command takes an image in and outputs an image. Chain them to build anything. The agent calling picture-it IS the planner — there is no AI planner inside the tool.
 
+## Before You Generate Anything — Think First
+
+Image generation costs real money ($0.03–$0.15 per FAL call). A 4-pass workflow is $0.10+. Don't burn budget on a vague idea — spend time planning before running any commands.
+
+### Step 1: Understand the purpose
+
+Before touching picture-it, get full clarity on what the user wants. Ask yourself:
+
+- **What is this image for?** (blog header, Instagram ad, YouTube thumbnail, product comparison, poster)
+- **Who is the audience?** (developers, consumers, enterprise buyers)
+- **What should someone FEEL when they see it?** (excitement, trust, urgency, curiosity)
+- **What's the one message?** Every good image communicates exactly one thing.
+- **Where will it be displayed?** This determines size, text sizing, and composition rules.
+
+If any of these are unclear, ask the user before proceeding. A 30-second question saves $0.15 in wasted generation.
+
+### Step 2: Plan the composition
+
+Think through at least 3 different approaches before picking one. Consider:
+
+- **Can this be done without FAL?** Templates and Satori compose are free. A solid gradient + good typography is often enough.
+- **What's the minimum number of FAL calls?** Each call costs money. Plan the fewest passes that achieve the goal.
+- **Which technique fits?** Text-behind-subject for thumbnails, remove-bg + compose for product photos, multi-pass for cinematic scenes.
+
+Present your top 2-3 ideas to the user briefly — one sentence each — and let them pick before generating. Example:
+
+> "Here are a few directions:
+> 1. Dramatic product shot — generate a dark stage, edit to place your logo as a glowing 3D object ($0.07)
+> 2. Clean comparison — remove-bg from both products, compose on gradient with text ($0.01)
+> 3. Text-behind-subject — generate an action scene, edit to weave the title behind the subject ($0.07)
+>
+> Which direction, or a mix?"
+
+### Step 3: Plan the pipeline
+
+Before running the first command, write out the full pipeline:
+
+```
+1. generate (flux-dev $0.03) — dark stage scene
+2. edit (seedream $0.04) — place logo into scene
+3. compose (free) — add text overlay
+4. grade + vignette (free) — post-process
+Total: ~$0.07
+```
+
+This avoids discovering mid-way that you need a different approach and wasting the earlier calls.
+
 ## Commands Quick Reference
 
 | Command | What it does | Needs FAL? |
@@ -114,6 +161,16 @@ This is the difference between mediocre and professional output. Read `reference
 **For edits:** Always end with *"Keep everything else exactly the same"* and list what to preserve. Without this, the AI changes things you didn't want changed.
 
 **For background replacement:** Use realistic, specific locations ("modern upscale mall entrance during daytime, natural warm daylight"). Over-dramatic backgrounds ("city at night with neon reflections") look obviously fake.
+
+## Typography
+
+**For big titles and hero text:** Use the FAL model via `edit` — it handles large text well and integrates it into the scene naturally. No font size math needed, just say "very large bold" in the prompt.
+
+**For precise small text** (credits, URLs, badges, coverlines): Use `compose` or `text` with Satori. This is where font sizing matters — images display much smaller on phones. Quick rule: on a 1080px Instagram image, nothing under 36px is readable. Run `picture-it download-fonts` first if fonts aren't installed.
+
+**Hierarchy:** Max 3 text sizes per image. Brand name should be larger than tagline.
+
+**Font pairing:** Serif + sans-serif works best. For FAL model text, just describe the style in the prompt. For Satori, 3 fonts are bundled — drop more `.ttf` files into `~/.picture-it/fonts/`. Run `picture-it download-fonts` if fonts aren't installed. See `references/composition-guide.md` for pairing suggestions.
 
 ## Composition Techniques
 

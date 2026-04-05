@@ -4,18 +4,63 @@ Techniques for creating professional images with picture-it, learned from real p
 
 ## Table of Contents
 
-1. Text Behind Subject
-2. Multi-Pass Editing
-3. Product Photography with Real Images
-4. Magazine Covers and Posters
-5. Color Grading and Post-Processing
-6. Background Removal Best Practices
-7. Writing Effective FAL Prompts
-8. Overlay Composition with JSON
+1. Typography & Font Size Calculator
+2. Text Behind Subject
+3. Multi-Pass Editing
+4. Product Photography with Real Images
+5. Magazine Covers and Posters
+6. Color Grading and Post-Processing
+7. Background Removal Best Practices
+8. Writing Effective FAL Prompts
+9. Overlay Composition with JSON
 
 ---
 
-## 1. Text Behind Subject
+## 1. Typography
+
+### When to Use Which
+
+- **Big titles, hero text, headlines:** Use FAL via `edit` command. The model renders text naturally into the scene. Just say "very large bold" in the prompt — no pixel math needed.
+- **Precise small text** (credits, URLs, badges, coverlines): Use `compose` or `text` with Satori. Run `picture-it download-fonts` first if fonts aren't installed.
+
+### Satori Font Sizing (only applies to `compose`/`text` commands)
+
+Images display much smaller on phones. Quick rule: **on a 1080px image, nothing under 36px is readable on a phone.**
+
+| Platform | Image width | Scale | Min readable |
+|---|---|---|---|
+| Instagram | 1080px | 3× | 36px+ |
+| Blog/OG | 1200px | 2× | 24px+ |
+| YouTube thumb | 1280px | 6× | 80px+ |
+
+### Typography Rules
+
+- **Max 3 text sizes** per image — more creates noise
+- **Brand name > tagline** — brand should be the largest text, not the tagline
+- **Font pairing:** Use a serif + sans-serif pair or two complementary sans-serifs. Some proven combinations:
+
+| Pair | Vibe |
+|---|---|
+| Playfair Display + Inter | Elegant editorial |
+| DM Serif Display + Inter | Classic luxury |
+| Cormorant Garamond + Montserrat | Refined modern |
+| Lora + Montserrat | Warm editorial |
+| Space Grotesk + Inter | Tech / SaaS |
+| Poppins + Open Sans | Friendly modern |
+| Work Sans + Merriweather | Professional |
+| Bricolage Grotesque + Crimson Text | Creative editorial |
+| Roboto + Nunito | Clean neutral |
+
+**For FAL model text** (`edit`/`generate`): Any font works — just describe it in the prompt ("elegant serif", "bold condensed sans-serif", "thin futuristic"). The model renders it.
+
+**For Satori text** (`compose`/`text`): picture-it bundles Inter, Space Grotesk, and DM Serif Display. Drop additional `.ttf` files into `~/.picture-it/fonts/` to use more. Run `picture-it download-fonts` to install the bundled set.
+
+- **Contrast:** White text on light backgrounds needs a gradient overlay behind it
+- **Padding:** Keep text at least 5% from canvas edges
+
+---
+
+## 2. Text Behind Subject
 
 The most impactful technique for thumbnails and posters. The text appears to be part of the 3D scene, not floating on top.
 
