@@ -16,9 +16,9 @@ Each command takes an image in, does one thing, and outputs an image. Chain them
 |                                                                        ![Magazine Cover](samples/magazine-cover.png)                                                                        |                                                                  ![Movie Poster](samples/movie-poster.png)                                                                   |
 |                                                                    **Magazine Cover** — `generate` → `edit` → `compose`                                                                     |                                                     **Sci-Fi Movie Poster** — `generate` → `edit` → `compose` → `grade`                                                      |
 |                              AI-generated portrait with Satori-rendered masthead, headlines, and credits layered on top. Pixel-perfect typography over AI art.                              |                   Multi-pass: Flux generates the scene, SeedDream adds volumetric fog, Satori renders the title and credits. Cinematic grade finishes it.                    |
-|                                                                        ![Hoka Mach 7](samples/hoka-mach7-social.png)                                                                        |                                                                                                                                                                              |
-|                                                       **Product Social Ad** — `generate` → `edit` → `compose` → `grade` → `vignette`                                                        |                                                                                                                                                                              |
-| 4-pass workflow: Flux Dev generates floating shoe scene, SeedDream places "MACH 7" text behind the shoe for 3D depth, Satori renders product info overlay, then cool-tech grade + vignette. |                                                                                                                                                                              |
+|                                                                        ![Hoka Mach 7](samples/hoka-mach7-social.png)                                                                        |                                                                  ![Casio Watch Poster](samples/casio-watch-poster.png)                                                                   |
+|                                                       **Product Social Ad** — `generate` → `edit` → `compose` → `grade` → `vignette`                                                        |                                                     **Watch Poster** — `generate` → `edit` → `edit` → `grade` → `vignette`                                                      |
+| 4-pass workflow: Flux Dev generates floating shoe scene, SeedDream places "MACH 7" text behind the shoe for 3D depth, Satori renders product info overlay, then cool-tech grade + vignette. | Only a product image link and spec sheet were provided. Recraft V4 generates the angular glass backdrop, Banana Pro places the watch and renders all text directly into the scene. |
 
 ## Install
 
@@ -462,7 +462,42 @@ picture-it vignette -i graded.png -o hoka-mach7-social.png
 
 ---
 
-### Total Cost for All Samples: ~$0.33
+### Casio Watch Poster — $0.55
+
+![Casio Watch Poster](samples/casio-watch-poster.png)
+
+All that was provided was a [product image link](https://www.casio.com/content/dam/casio/product-info/locales/in/en/timepiece/product/watch/W/W2/w22/w-221h-8av/assets/W-221H-8AV.png.transform/main-visual-pc/image.png) and the product info from Casio's website (model name, description, features). Claude planned the entire composition, chose models, wrote prompts, and chained operations.
+
+```bash
+# 1. Generate dramatic angular backdrop with premium model ($0.25)
+picture-it generate \
+  --prompt "Ultra premium dark product photography backdrop. Pitch black background with sharp angular geometric shapes made of frosted glass and brushed steel floating at dynamic angles. Subtle cold blue and warm amber accent lights hitting the edges of the geometric shapes, creating beautiful light streaks and reflections. A sleek reflective dark surface at the bottom with mirror-like reflections. Volumetric light beams cutting through from upper right. Dust particles visible in the light. Minimal, high-end watch advertisement aesthetic. Shot like a luxury brand campaign, Hasselblad medium format, ultra sharp." \
+  --model recraft-v4 --size 1080x1440 -o bg.png
+
+# 2. Place watch into scene with best realism ($0.15)
+picture-it edit -i bg.png -i casio-watch.png \
+  --prompt "Place Figure 2 (a Casio digital watch) as the central hero of this dark scene. The watch is floating prominently in the center, angled dynamically at about 15 degrees, large and commanding. Dramatic cold blue and warm amber rim lighting wraps around the watch edges. The watch face LCD screen glows softly. Beautiful reflections on the dark surface below. The geometric glass shapes frame the watch naturally. Keep the watch design, LCD display, buttons, strap, and CASIO branding exactly faithful to the original. Professional luxury watch advertisement photography." \
+  --model banana-pro -o hero.png
+
+# 3. Crop to exact poster size (free)
+picture-it crop -i hero.png --size 1080x1440 --position attention -o cropped.png
+
+# 4. Render all text directly into the image ($0.15)
+picture-it edit -i cropped.png \
+  --prompt "Add text to this watch advertisement poster. At the top, add 'CASIO' in very large bold white capital letters, wide letter-spacing, clean modern sans-serif font, centered. Below it in smaller thin white letters add 'W-221H-8AV'. At the bottom, add '10-YEAR BATTERY | WORLD TIME | LED BACKLIGHT' in small white capital letters. The text should look naturally lit by the volumetric light beams. Keep everything else exactly the same." \
+  --model banana-pro -o with-text.png
+
+# 5. Post-process (free)
+picture-it grade -i with-text.png --name cinematic -o graded.png
+picture-it vignette -i graded.png --opacity 0.25 -o vignetted.png
+picture-it grain -i vignetted.png --intensity 0.02 -o casio-watch-poster.png
+```
+
+Key decisions: **Recraft V4** ($0.25) was chosen for the backdrop because it produces the best lighting, materials, and composition — the frosted glass prisms are noticeably more photorealistic than cheaper models. **Banana Pro** ($0.15) was used twice: once for placing the watch with faithful product detail preservation, and again for rendering all text directly into the scene (no Satori overlay — the text is part of the image with natural lighting interaction).
+
+---
+
+### Total Cost for All Samples: ~$0.88
 
 | Sample            | Models Used                      | Cost   |
 | ----------------- | -------------------------------- | ------ |
