@@ -269,13 +269,13 @@ picture-it includes a Claude skill so AI agents know how to use it effectively â
 **Global install** (available in all projects):
 
 ```bash
-npx skills add geon/picture-it -g
+npx skills add geongeorge/picture-it -g
 ```
 
 **Project install** (available in current project only):
 
 ```bash
-npx skills add geon/picture-it
+npx skills add geongeorge/picture-it
 ```
 
 Browse on [skills.sh](https://skills.sh).
