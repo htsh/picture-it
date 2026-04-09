@@ -109,3 +109,69 @@ bun --hot ./index.ts
 ```
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
+
+## Project Notes
+
+`picture-it` is a CLI tool for composable image operations. Treat it like a command-line product, not a Bun-only app:
+
+- Local development uses Bun.
+- The published artifact targets Node.js 18+ via `scripts/build.ts`, which rewrites the shebang in `dist/index.js`.
+- Avoid introducing Bun-only runtime APIs into `index.ts` or `src/**` unless the code path is build-time only.
+
+Important CLI contract:
+
+- Commands print only the output path to stdout, or JSON for `batch`.
+- Progress and diagnostics go to stderr via `log()` in `src/operations.ts`.
+- Preserve subcommand names, flag names, and stdout shape unless the user explicitly asks for a breaking change.
+
+## Inference Migration
+
+If you touch AI inference code, read `docs/fal-to-replicate-migration.md` first.
+
+Current provider-related files:
+
+- `src/fal.ts`
+- `src/model-router.ts`
+- `src/types.ts`
+- `src/operations.ts`
+- `src/config.ts`
+- `src/pipeline.ts`
+- `index.ts`
+
+Also update the surrounding shipped/docs surface when provider behavior changes:
+
+- `package.json`
+- `bun.lock`
+- `scripts/build.ts`
+- `README.md`
+- `CLAUDE.md`
+- `skill/picture-it/SKILL.md`
+- `docs/replicate-model-mapping.md`
+
+Migration guardrails from the current plan:
+
+- Replace FAL with Replicate as the only inference provider. Do not add a provider abstraction unless the user asks for it.
+- Preserve the current CLI surface while swapping the backend.
+- Rename FAL-specific types/config/auth cleanly rather than keeping compatibility aliases forever.
+- Keep static cost hints for routing decisions; any actual per-run cost logging must still go to stderr.
+
+## Current Codebase Realities
+
+- The codebase is still FAL-first today. The migration doc is a plan, not implemented behavior.
+- `src/pipeline.ts` and several CLI commands still depend on `uploadFile` and `uploadBuffer`.
+- Input handling is file-path based today. Do not assume HTTP URL inputs already work:
+  - `index.ts` validates `edit` inputs with `fs.existsSync`.
+  - `readInput()` in `src/operations.ts` reads from local paths only.
+- `scripts/build.ts` still externalizes `@fal-ai/client`; update build metadata when the provider changes.
+
+## Verification
+
+There is no meaningful automated test suite yet. When changing inference, auth, routing, or pipeline behavior, prefer this minimum verification set:
+
+- `bun run build`
+- smoke-test `generate`
+- smoke-test `edit`
+- smoke-test `remove-bg`
+- smoke-test `upscale`
+- smoke-test `pipeline`
+- smoke-test a non-AI path such as `template` or `text`

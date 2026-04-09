@@ -1,7 +1,7 @@
 # Replicate Model Mapping — TO BE FILLED
 
-**Status:** Template. Phase 1 of the migration fills this in.
-**Purpose:** Source-of-truth mapping from every current FAL model/endpoint to its Replicate equivalent, with the pinned version and input schema diff.
+**Status:** Template. Phase 1 of `add-replicate-provider.md` fills this in.
+**Purpose:** Source-of-truth mapping from every current FAL model/endpoint to its Replicate equivalent, with the pinned version and input schema diff. Used to decide which logical models the Replicate provider will support, and which stay FAL-only.
 
 ## How to fill this in
 
