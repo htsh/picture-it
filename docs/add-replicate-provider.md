@@ -60,7 +60,17 @@ export interface ImageProvider {
 
 ## Open questions (blockers for implementation)
 
-1. **Model coverage on Replicate.** Which logical models in `model-router.ts` actually exist on Replicate? Phase 1 (inventory) answers this. Known-suspected gaps: `imagineart`, `fibo`, `fibo-edit`, `reve`, `reve-fast`, `pixelcut`. The mapping doc (`replicate-model-mapping.md`) tracks decisions per gap.
+1. **Model coverage on Replicate.** A coverage survey (2026-04-09, recorded in `replicate-model-mapping.md`) shows near-total coverage. Summary:
+   - **Clean official matches:** flux-schnell, flux-dev, recraft v3/v4, fibo, seedream v4/v4.5, nano-banana-2, nano-banana-pro, flux-kontext (+lora), reve, reve-fast, bria, creative-upscaler.
+   - **Community-only on Replicate:** birefnet, rembg. Usable but not vendor-backed.
+   - **Version drift:** `imagineart` exists as community `imagineart/imagineart-1.0` (FAL is on 1.5-preview).
+   - **Missing:** `pixelcut` — no Replicate equivalent. Clean substitutes: `bria/remove-background` or `recraft-ai/recraft-remove-background` (both official).
+   - **Needs verification in Phase 1:** version hashes, input schemas, and whether nano-banana-2/pro expose a separate edit endpoint or reuse the generate slug with an image input.
+
+   Team decisions needed (tracked in the mapping doc):
+   - How to handle `pixelcut` on Replicate: explicit error pointing at `bria`/`recraft-bg` (recommended) vs silent alias.
+   - Whether to ship `imagineart` on Replicate with the 1.0 version drift, or mark it FAL-only (recommended).
+   - Whether to accept community models (`birefnet`, `rembg`) on Replicate, or offer an "official-only" subset.
 
 2. **Routing defaults per provider.** `selectEditModel` currently picks `kontext` for single-image edits, `seedream` for multi-image, `banana2` for >10 inputs. If the active provider doesn't support one of those, what's the fallback? Options:
    - **Per-provider default tables.** Each provider defines its own cheapest-model-per-tier. Cleanest but duplicates logic.
@@ -78,9 +88,14 @@ export interface ImageProvider {
 
 ### Phase 1 — Inventory (no code)
 
-Fill in `docs/replicate-model-mapping.md`. For each model in the FAL router: find the Replicate slug + version, diff the input schema, record pricing. Flag gaps.
+Coverage survey is **complete** (2026-04-09, see `replicate-model-mapping.md`). Remaining Phase 1 work:
 
-Deliverable: a reviewed mapping table the team signs off on before Phase 3.
+1. Fetch and pin current version hashes for every mapped model (`GET /v1/models/{owner}/{name}`).
+2. Diff the input schema of every mapped model against the per-model branches in `src/fal.ts`'s `generate()` and `edit()`. Record renames/additions/removals.
+3. Pull current pricing per model; flag flat vs hardware-time billing.
+4. Verify the edge cases noted in the mapping doc (nano-banana edit path, `bria/fibo-edit` exact slug).
+
+Deliverable: a fully populated mapping table the team signs off on before Phase 3.
 
 ### Phase 2 — Gap resolution
 

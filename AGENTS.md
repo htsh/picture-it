@@ -124,9 +124,9 @@ Important CLI contract:
 - Progress and diagnostics go to stderr via `log()` in `src/operations.ts`.
 - Preserve subcommand names, flag names, and stdout shape unless the user explicitly asks for a breaking change.
 
-## Inference Migration
+## Provider Work
 
-If you touch AI inference code, read `docs/fal-to-replicate-migration.md` first.
+If you touch AI inference code, read `docs/add-replicate-provider.md` first.
 
 Current provider-related files:
 
@@ -138,6 +138,13 @@ Current provider-related files:
 - `src/pipeline.ts`
 - `index.ts`
 
+Planned provider layout from the current doc:
+
+- `src/providers/types.ts`
+- `src/providers/fal.ts`
+- `src/providers/replicate.ts`
+- `src/providers/index.ts`
+
 Also update the surrounding shipped/docs surface when provider behavior changes:
 
 - `package.json`
@@ -146,23 +153,28 @@ Also update the surrounding shipped/docs surface when provider behavior changes:
 - `README.md`
 - `CLAUDE.md`
 - `skill/picture-it/SKILL.md`
+- `docs/add-replicate-provider.md`
 - `docs/replicate-model-mapping.md`
 
-Migration guardrails from the current plan:
+Provider guardrails from the current plan:
 
-- Replace FAL with Replicate as the only inference provider. Do not add a provider abstraction unless the user asks for it.
-- Preserve the current CLI surface while swapping the backend.
-- Rename FAL-specific types/config/auth cleanly rather than keeping compatibility aliases forever.
-- Keep static cost hints for routing decisions; any actual per-run cost logging must still go to stderr.
+- Support both FAL and Replicate. Do not remove FAL.
+- Introduce a provider abstraction for inference work instead of branching provider logic throughout the CLI.
+- FAL remains the default provider unless the user explicitly changes config, env, or CLI flags.
+- Model names stay logical and provider-agnostic. Do not silently substitute unsupported models on another provider.
+- Keep static cost hints for routing; any actual-cost logging still goes to stderr.
+- Additive auth only: `auth --fal` stays, `auth --replicate` is added.
+- Provider selection precedence is: CLI flag, then `PICTURE_IT_PROVIDER`, then saved config, then default `fal`.
 
 ## Current Codebase Realities
 
-- The codebase is still FAL-first today. The migration doc is a plan, not implemented behavior.
+- The codebase is still FAL-first today. The provider abstraction is not implemented yet.
 - `src/pipeline.ts` and several CLI commands still depend on `uploadFile` and `uploadBuffer`.
 - Input handling is file-path based today. Do not assume HTTP URL inputs already work:
   - `index.ts` validates `edit` inputs with `fs.existsSync`.
   - `readInput()` in `src/operations.ts` reads from local paths only.
-- `scripts/build.ts` still externalizes `@fal-ai/client`; update build metadata when the provider changes.
+- `scripts/build.ts` still externalizes `@fal-ai/client`; update build metadata and dependencies when adding `replicate`.
+- The migration plan assumes `prepareImageInput()` will hide the FAL upload vs Replicate data-URI difference. Keep provider-specific image preparation behind that seam.
 
 ## Verification
 
