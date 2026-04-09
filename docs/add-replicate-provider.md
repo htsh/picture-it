@@ -30,7 +30,7 @@
 4. **Model names are logical, not provider-specific.** The user types `--model seedream` regardless of provider. Internally, the router resolves `(provider, logicalModel)` → endpoint. The existing `FalModel` type is renamed to `ModelId` to reflect that it's provider-agnostic.
 5. **Pin Replicate versions.** Endpoint strings are `owner/name:versionHash`, each with a `// pinned YYYY-MM-DD` comment. FAL endpoints remain slugs (FAL doesn't expose version pinning the same way).
 6. **No uploads on Replicate.** Pass image buffers to Replicate as data URIs (`data:image/png;base64,...`). FAL keeps using `fal.storage.upload` — no change to its code path.
-7. **Cost reporting.** Static cost table per `(provider, model)` for pre-call estimates and routing decisions. Post-call actual cost logged to stderr when Replicate returns `prediction.metrics`. FAL's current cost log is unchanged.
+7. **Cost reporting.** Static cost table keyed per `(provider, model)` — see Phase 4 for the `MODEL_COSTS` shape and rationale. Used for both pre-call estimates and routing decisions. Post-call actual cost logged to stderr when Replicate returns `prediction.metrics`. FAL's current cost log is unchanged.
 8. **Fallback policy for model coverage gaps.** If a user asks for a model that the active provider doesn't support (e.g. `--model imagineart --provider replicate` and imagineart isn't on Replicate), the CLI fails with a clear error listing available alternatives on that provider. It does **not** silently substitute.
 
 ## Provider interface (proposed)
@@ -128,9 +128,23 @@ Goal: extract the interface without introducing Replicate yet. This keeps the di
    - Endpoint maps become `Record<ProviderName, Partial<Record<ModelId, string>>>`.
    - `getGenerateEndpoint(provider, model)` / `getEditEndpoint(provider, model)`.
    - `canGenerate(provider, model)` / `canEdit(provider, model)`.
-   - `selectGenerateModel(provider, explicit?)` — same logic, but falls through the cost-sorted list skipping models the provider doesn't support.
-   - `selectEditModel(provider, inputCount, explicit?)` — same treatment.
-   - `MODEL_COSTS` stays a single table (cost is a property of the model, not the provider, and the differences are small enough that one table is fine).
+   - `selectGenerateModel(provider, explicit?)` — consults the per-provider cost table below and returns the cheapest generate-capable model for that provider.
+   - `selectEditModel(provider, inputCount, explicit?)` — same treatment, tiered by input count.
+   - `MODEL_COSTS` becomes `Record<ProviderName, Partial<Record<ModelId, number>>>`. Each provider only lists the models it actually supports; the absence of a `(provider, model)` entry is the source of truth for "not supported on this provider," so `canGenerate`/`canEdit` read the same structure instead of a separate support map. This keeps coverage and pricing in one place and means `selectGenerateModel`/`selectEditModel` pick the real cheapest on the active provider without a fallback walk.
+
+   ```ts
+   // Shape, not final numbers. Phase 1 pricing pass fills values.
+   const MODEL_COSTS: Record<ProviderName, Partial<Record<ModelId, number>>> = {
+     fal:       { "flux-schnell": 0.003, seedream: 0.04, /* ... */ },
+     replicate: { "flux-schnell": 0.003, seedream: 0.03, /* ... */ },
+   };
+   ```
+
+   Rationale for per-provider (not shared) pricing:
+   - **Honest pre-call logs.** FAL and Replicate charge different prices for the same logical model. A shared table would print a wrong number to stderr for at least one provider on every call; agents read and act on those logs.
+   - **Correct routing.** "Cheapest model" is a function of the active provider. A shared table forces a coverage-walk fallback that can land on a model that isn't actually cheapest on the active provider.
+   - **Cost of the extra structure is trivial** — one more level of nesting in one constant.
+   - If Phase 1 pricing turns out to be identical across providers for every model, the per-provider structure collapses visually (same numbers on both sides) without any refactor; the reverse (shared → per-provider after shipping) is a breaking change for the router.
 4. `src/providers/index.ts` — `getProvider("replicate")` returns the new provider.
 5. Register `replicate` with the factory.
 

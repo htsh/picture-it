@@ -93,17 +93,31 @@ The coverage survey answered "does it exist." Still needed before writing code:
 
 ## Pricing snapshot
 
-Updated once Phase 1 completes. Record the snapshot date so future reviewers know when prices were last verified.
+Updated once Phase 1 completes. Both FAL and Replicate columns are populated because `MODEL_COSTS` in the router is keyed per `(provider, model)` — see `add-replicate-provider.md` Phase 4. A dash means the model is not offered by that provider (and therefore won't appear in that provider's branch of `MODEL_COSTS`).
+
+Record the snapshot date so future reviewers know when prices were last verified.
 
 **Pricing verified:** TODO (date)
 
-| Model | FAL price | Replicate price | Pricing model |
-| --- | --- | --- | --- |
-| flux-schnell | $0.003 | TODO | TODO |
-| flux-dev | $0.03 | TODO | TODO |
-| seedream | $0.04 | TODO | TODO |
-| kontext | $0.04 | TODO | TODO |
-| banana2 | $0.08 | TODO | TODO |
-| banana-pro | $0.15 | TODO | TODO |
-| recraft-v4 | $0.25 | TODO | TODO |
-| *(others)* | | | |
+| Logical model | FAL price | FAL billing | Replicate price | Replicate billing |
+| --- | --- | --- | --- | --- |
+| flux-schnell | $0.003 | flat | TODO | TODO |
+| flux-dev | $0.03 | flat | TODO | TODO |
+| seedream | $0.04 | flat | TODO | TODO |
+| seedream-v4 | TODO | TODO | TODO | TODO |
+| kontext | $0.04 | flat | TODO | TODO |
+| kontext-lora | $0.035 | flat | TODO | TODO |
+| banana2 | $0.08 | flat | TODO | TODO |
+| banana-pro | $0.15 | flat | TODO | TODO |
+| recraft-v3 | $0.04 | flat | TODO | TODO |
+| recraft-v4 | $0.25 | flat | TODO | TODO |
+| fibo | $0.04 | flat | TODO | TODO |
+| fibo-edit | $0.04 | flat | TODO | TODO |
+| reve | $0.04 | flat | TODO | TODO |
+| reve-fast | $0.02 | flat | TODO | TODO |
+| imagineart | $0.03 | flat | — (FAL-only, proposed) | — |
+| birefnet | — | — | TODO (community) | TODO |
+| bria (bg removal) | TODO | TODO | TODO | TODO |
+| pixelcut | TODO | TODO | — (no equivalent) | — |
+| rembg | TODO | TODO | TODO (community) | TODO |
+| creative-upscaler | TODO | TODO | TODO | TODO |

@@ -165,6 +165,20 @@ Provider guardrails from the current plan:
 - Keep static cost hints for routing; any actual-cost logging still goes to stderr.
 - Additive auth only: `auth --fal` stays, `auth --replicate` is added.
 - Provider selection precedence is: CLI flag, then `PICTURE_IT_PROVIDER`, then saved config, then default `fal`.
+- Prefer a global root `--provider <fal|replicate>` flag over duplicating provider flags on each inference subcommand.
+- Pipeline and batch specs may gain an optional top-level `provider` field; treat that as part of the reproducibility contract if implemented.
+
+Replicate coverage notes from `docs/replicate-model-mapping.md`:
+
+- Coverage survey is complete; version hashes, input schema diffs, pricing, and a few edge-case verifications are still pending.
+- Do not assume every logical model is available on Replicate:
+  - `pixelcut` is missing.
+  - `imagineart` exists only as a community 1.0 variant and is a likely FAL-only candidate.
+  - `birefnet` and `rembg` are community-model candidates on Replicate, not vendor-backed.
+  - `fibo-edit` exact slug and nano-banana edit-path behavior still need verification.
+- When provider support differs, prefer a clear user-facing error with supported alternatives over aliasing or silent fallback.
+- Until the team decides otherwise, prefer official Replicate models where possible and treat community-model support as an explicit choice, not an assumption.
+- The cost-table shape is not fully settled in the docs yet; do not assume shared-per-model pricing versus per-provider pricing without checking the latest plan.
 
 ## Current Codebase Realities
 
