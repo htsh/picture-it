@@ -3,41 +3,47 @@ import { Command } from "commander";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
-import { log, parseSize, readInput, writeOutput, ensureFalKey } from "./src/operations.ts";
-import { configureFal, generate, edit, removeBg, upscale, uploadFile, uploadBuffer, cropToExact } from "./src/fal.ts";
+import { log, parseSize, readInput, writeOutput, ensureProviderKey } from "./src/operations.ts";
+import { getProvider, configureProvider } from "./src/providers/index.ts";
 import { composite } from "./src/compositor.ts";
 import { applyColorGrade, applyGrain, applyVignette } from "./src/postprocess.ts";
 import { executePipeline, createGradientBackground } from "./src/pipeline.ts";
 import { getTemplate } from "./src/templates/index.ts";
-import { checkAndFixContrast } from "./src/contrast.ts";
 import { PLATFORM_PRESETS } from "./src/presets.ts";
-import { setConfigValue, getConfigValue, listConfig, clearConfig, maskKey, getKeySource } from "./src/config.ts";
+import { setConfigValue, getConfigValue, listConfig, clearConfig, maskKey, getKeySource, resolveProvider } from "./src/config.ts";
 import { downloadFonts, getFontDirectory } from "./src/fonts.ts";
-import type { ColorGrade, Overlay, PipelineStep, BatchEntry } from "./src/types.ts";
+import type { ColorGrade, Overlay, PipelineStep, BatchEntry, ProviderName } from "./src/types.ts";
 
 const program = new Command();
 
 program
   .name("picture-it")
   .description("Photoshop for AI agents — composable image operations")
-  .version("0.2.0");
+  .version("0.2.0")
+  .option("--provider <name>", "AI provider: fal or replicate");
 
 // ─── GENERATE ─────────────────────────────────────────────
 program
   .command("generate")
   .description("Generate an image from a text prompt")
   .requiredOption("--prompt <text>", "Image description")
-  .option("--model <name>", "FAL model (flux-schnell, flux-dev, recraft-v3, recraft-v4, imagineart, fibo)")
+  .option("--model <name>", "Model name")
   .option("--size <WxH>", "Output dimensions")
   .option("--platform <name>", "Platform preset for size")
   .option("-o, --output <path>", "Output file", "output.png")
   .option("--verbose", "Detailed output")
-  .action(async (opts) => {
-    const falKey = ensureFalKey();
-    configureFal(falKey);
+  .action(async (opts, cmd) => {
+    const providerName = resolveProvider(cmd.parent?.getOptionValue("provider"));
+    const key = ensureProviderKey(providerName);
+    configureProvider(providerName, key);
+    const provider = getProvider(providerName);
+
     const { width, height } = parseSize(opts.size, opts.platform);
-    const buf = await generate({ prompt: opts.prompt, model: opts.model, width, height, verbose: opts.verbose });
-    const cropped = await cropToExact(buf, width, height);
+    const buf = await provider.generate({ prompt: opts.prompt, model: opts.model, width, height, verbose: opts.verbose });
+    const cropped = await sharp(buf)
+      .resize(width, height, { fit: "cover", position: "attention" })
+      .png()
+      .toBuffer();
     const out = await writeOutput(cropped, opts.output);
     console.log(out);
   });
@@ -48,13 +54,15 @@ program
   .description("Edit images using AI — the primary command")
   .requiredOption("--prompt <text>", "Edit instructions")
   .requiredOption("-i, --input <paths...>", "Input image(s)")
-  .option("--model <name>", "FAL model (kontext, seedream, reve, reve-fast, fibo-edit, banana2, banana-pro)")
+  .option("--model <name>", "Model name")
   .option("--size <WxH>", "Output dimensions")
   .option("-o, --output <path>", "Output file", "output.png")
   .option("--verbose", "Detailed output")
-  .action(async (opts) => {
-    const falKey = ensureFalKey();
-    configureFal(falKey);
+  .action(async (opts, cmd) => {
+    const providerName = resolveProvider(cmd.parent?.getOptionValue("provider"));
+    const key = ensureProviderKey(providerName);
+    configureProvider(providerName, key);
+    const provider = getProvider(providerName);
 
     const inputs = opts.input as string[];
     for (const f of inputs) {
@@ -62,15 +70,21 @@ program
     }
 
     if (opts.verbose) log(`Uploading ${inputs.length} image(s)...`);
-    const urls = await Promise.all(inputs.map((f: string) => uploadFile(path.resolve(f))));
+    const urls = await Promise.all(inputs.map(async (f: string) => {
+      const buf = await sharp(path.resolve(f)).png().toBuffer();
+      return provider.prepareImageInput(buf, path.basename(f));
+    }));
 
     const meta = await sharp(inputs[0]!).metadata();
     const { width, height } = opts.size
       ? parseSize(opts.size)
       : { width: meta.width || 1200, height: meta.height || 630 };
 
-    const buf = await edit({ inputUrls: urls, prompt: opts.prompt, model: opts.model, width, height, verbose: opts.verbose });
-    const cropped = await cropToExact(buf, width, height);
+    const buf = await provider.edit({ inputUrls: urls, prompt: opts.prompt, model: opts.model, width, height, verbose: opts.verbose });
+    const cropped = await sharp(buf)
+      .resize(width, height, { fit: "cover", position: "attention" })
+      .png()
+      .toBuffer();
     const out = await writeOutput(cropped, opts.output);
     console.log(out);
   });
@@ -83,12 +97,16 @@ program
   .option("--model <name>", "Model: bria (default), birefnet, pixelcut, rembg")
   .option("-o, --output <path>", "Output file", "output.png")
   .option("--verbose", "Detailed output")
-  .action(async (opts) => {
-    const falKey = ensureFalKey();
-    configureFal(falKey);
-    const url = await uploadFile(path.resolve(opts.input));
-    const buf = await removeBg({ inputUrl: url, model: opts.model, verbose: opts.verbose });
-    const out = await writeOutput(buf, opts.output);
+  .action(async (opts, cmd) => {
+    const providerName = resolveProvider(cmd.parent?.getOptionValue("provider"));
+    const key = ensureProviderKey(providerName);
+    configureProvider(providerName, key);
+    const provider = getProvider(providerName);
+
+    const buf = await readInput(opts.input);
+    const url = await provider.prepareImageInput(buf, path.basename(opts.input));
+    const result = await provider.removeBg({ inputUrl: url, model: opts.model, verbose: opts.verbose });
+    const out = await writeOutput(result, opts.output);
     console.log(out);
   });
 
@@ -98,12 +116,14 @@ program
   .description("Remove background and generate a new one")
   .requiredOption("-i, --input <path>", "Input image")
   .requiredOption("--prompt <text>", "New background description")
-  .option("--model <name>", "FAL model for new background")
+  .option("--model <name>", "Model for new background")
   .option("-o, --output <path>", "Output file", "output.png")
   .option("--verbose", "Detailed output")
-  .action(async (opts) => {
-    const falKey = ensureFalKey();
-    configureFal(falKey);
+  .action(async (opts, cmd) => {
+    const providerName = resolveProvider(cmd.parent?.getOptionValue("provider"));
+    const key = ensureProviderKey(providerName);
+    configureProvider(providerName, key);
+    const provider = getProvider(providerName);
 
     const inputBuf = await readInput(opts.input);
     const meta = await sharp(inputBuf).metadata();
@@ -111,12 +131,15 @@ program
     const h = meta.height || 630;
 
     if (opts.verbose) log("Removing background...");
-    const url = await uploadBuffer(inputBuf, "input.png");
-    const cutout = await removeBg({ inputUrl: url, verbose: opts.verbose });
+    const url = await provider.prepareImageInput(inputBuf, "input.png");
+    const cutout = await provider.removeBg({ inputUrl: url, verbose: opts.verbose });
 
     if (opts.verbose) log("Generating new background...");
-    const bg = await generate({ prompt: opts.prompt, model: opts.model, width: w, height: h, verbose: opts.verbose });
-    const bgCropped = await cropToExact(bg, w, h);
+    const bg = await provider.generate({ prompt: opts.prompt, model: opts.model, width: w, height: h, verbose: opts.verbose });
+    const bgCropped = await sharp(bg)
+      .resize(w, h, { fit: "cover", position: "attention" })
+      .png()
+      .toBuffer();
 
     if (opts.verbose) log("Compositing...");
     const result = await sharp(bgCropped)
@@ -136,12 +159,16 @@ program
   .option("--scale <n>", "Scale factor", "2")
   .option("-o, --output <path>", "Output file", "output.png")
   .option("--verbose", "Detailed output")
-  .action(async (opts) => {
-    const falKey = ensureFalKey();
-    configureFal(falKey);
-    const url = await uploadFile(path.resolve(opts.input));
-    const buf = await upscale({ inputUrl: url, scale: parseInt(opts.scale), verbose: opts.verbose });
-    const out = await writeOutput(buf, opts.output);
+  .action(async (opts, cmd) => {
+    const providerName = resolveProvider(cmd.parent?.getOptionValue("provider"));
+    const key = ensureProviderKey(providerName);
+    configureProvider(providerName, key);
+    const provider = getProvider(providerName);
+
+    const buf = await readInput(opts.input);
+    const url = await provider.prepareImageInput(buf, path.basename(opts.input));
+    const result = await provider.upscale({ inputUrl: url, scale: parseInt(opts.scale), verbose: opts.verbose });
+    const out = await writeOutput(result, opts.output);
     console.log(out);
   });
 
@@ -156,7 +183,10 @@ program
   .action(async (opts) => {
     const inputBuf = await readInput(opts.input);
     const { width, height } = parseSize(opts.size);
-    const buf = await cropToExact(inputBuf, width, height, opts.position);
+    const buf = await sharp(inputBuf)
+      .resize(width, height, { fit: "cover", position: opts.position as any })
+      .png()
+      .toBuffer();
     const out = await writeOutput(buf, opts.output);
     console.log(out);
   });
@@ -338,7 +368,7 @@ program
   .requiredOption("--spec <path>", "Pipeline JSON file")
   .option("-o, --output <path>", "Output file", "output.png")
   .option("--verbose", "Detailed output")
-  .action(async (opts) => {
+  .action(async (opts, cmd) => {
     const specPath = path.resolve(opts.spec);
     if (!fs.existsSync(specPath)) { log(`Not found: ${specPath}`); process.exit(1); }
     const steps: PipelineStep[] = JSON.parse(fs.readFileSync(specPath, "utf-8"));
@@ -353,7 +383,7 @@ program
   .requiredOption("--spec <path>", "Batch spec JSON file")
   .option("--output-dir <dir>", "Output directory", ".")
   .option("--verbose", "Detailed output")
-  .action(async (opts) => {
+  .action(async (opts, cmd) => {
     const specPath = path.resolve(opts.spec);
     if (!fs.existsSync(specPath)) { log(`Not found: ${specPath}`); process.exit(1); }
 
@@ -394,7 +424,6 @@ program
     const ratio = w / (h || 1);
     const hasAlpha = meta.hasAlpha === true && meta.channels === 4;
 
-    // Dominant colors via tiny resize
     const { data } = await img.resize(8, 8, { fit: "cover" }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     const colorCounts = new Map<string, number>();
     for (let i = 0; i < data.length; i += 4) {
@@ -444,24 +473,35 @@ program
   .command("auth")
   .description("Configure API keys")
   .option("--fal <key>", "Set FAL API key")
+  .option("--replicate <key>", "Set Replicate API key")
   .option("--status", "Show key status")
   .option("--clear", "Remove all keys")
   .action(async (opts) => {
     if (opts.status) {
       const falInfo = getKeySource("fal_key");
-      log(falInfo ? `FAL_KEY: ${maskKey(falInfo.value)} (${falInfo.source}) ✓` : "FAL_KEY: not configured");
+      log(falInfo ? `FAL_KEY: ${maskKey(falInfo.value)} (${falInfo.source})` : "FAL_KEY: not configured");
+
+      const replicateInfo = getKeySource("replicate_key");
+      log(replicateInfo ? `REPLICATE_API_TOKEN: ${maskKey(replicateInfo.value)} (${replicateInfo.source})` : "REPLICATE_API_TOKEN: not configured");
+
+      const defaultProvider = getConfigValue("default_provider") || "fal";
+      log(`Default provider: ${defaultProvider}`);
+
       log(`Fonts: ${getFontDirectory()}`);
       return;
     }
     if (opts.clear) { clearConfig(); log("Keys cleared."); return; }
     if (opts.fal) { setConfigValue("fal_key", opts.fal); log(`FAL key saved: ${maskKey(opts.fal)}`); return; }
+    if (opts.replicate) { setConfigValue("replicate_key", opts.replicate); log(`Replicate key saved: ${maskKey(opts.replicate)}`); return; }
 
     // Interactive
     const readline = await import("readline");
     const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
     const ask = (q: string): Promise<string> => new Promise((resolve) => rl.question(q, resolve));
-    const falKey = await ask("FAL API key: ");
+    const falKey = await ask("FAL API key (press enter to skip): ");
     if (falKey.trim()) { setConfigValue("fal_key", falKey.trim()); log(`FAL key saved: ${maskKey(falKey.trim())}`); }
+    const replicateKey = await ask("Replicate API key (press enter to skip): ");
+    if (replicateKey.trim()) { setConfigValue("replicate_key", replicateKey.trim()); log(`Replicate key saved: ${maskKey(replicateKey.trim())}`); }
     rl.close();
   });
 

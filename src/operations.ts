@@ -2,6 +2,8 @@ import sharp from "sharp";
 import fs from "fs";
 import path from "path";
 import { PLATFORM_PRESETS } from "./presets.ts";
+import { getConfig } from "./config.ts";
+import type { ProviderName } from "./types.ts";
 
 export function log(msg: string) {
   process.stderr.write(`[picture-it] ${msg}\n`);
@@ -56,30 +58,19 @@ export async function writeOutput(
   return resolved;
 }
 
-export function ensureFalKey(): string {
-  const config = loadFalKey();
-  if (!config) {
-    log("No FAL API key configured. Run 'picture-it auth --fal <key>' to set up.");
+export function ensureProviderKey(provider: ProviderName): string {
+  const config = getConfig();
+  const keyName = provider === "fal" ? "FAL_KEY" : "REPLICATE_API_TOKEN";
+  const configKey = provider === "fal" ? "fal_key" : "replicate_key";
+  const key = config[configKey];
+
+  if (!key) {
+    log(`No ${keyName} configured. Run 'picture-it auth --${provider} <key>' to set up.`);
     process.exit(1);
   }
-  return config;
+  return key;
 }
 
-function loadFalKey(): string | undefined {
-  // 1. Env var
-  if (process.env["FAL_KEY"]) return process.env["FAL_KEY"];
-
-  // 2. Config file
-  const configPath = path.join(
-    process.env["HOME"] || "~",
-    ".picture-it",
-    "config.json"
-  );
-  try {
-    const raw = fs.readFileSync(configPath, "utf-8");
-    const config = JSON.parse(raw);
-    return config.fal_key;
-  } catch {
-    return undefined;
-  }
+export function ensureFalKey(): string {
+  return ensureProviderKey("fal");
 }

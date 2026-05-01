@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import type { PictureItConfig } from "./types.ts";
+import type { PictureItConfig, ProviderName } from "./types.ts";
 
 export const APP_DIR = path.join(
   process.env["HOME"] || process.env["USERPROFILE"] || "~",
@@ -28,9 +28,11 @@ export function getConfig(): PictureItConfig {
   const file = loadConfigFile();
   return {
     fal_key: process.env["FAL_KEY"] || file.fal_key,
+    replicate_key: process.env["REPLICATE_API_TOKEN"] || file.replicate_key,
     default_model: file.default_model,
     default_platform: file.default_platform,
     default_grade: file.default_grade,
+    default_provider: file.default_provider,
   };
 }
 
@@ -63,11 +65,16 @@ export function maskKey(key: string): string {
 }
 
 export function getKeySource(
-  key: "fal_key" | "anthropic_api_key"
+  key: "fal_key" | "anthropic_api_key" | "replicate_key"
 ): { value: string; source: string } | null {
 
-  const envKey = key === "fal_key" ? "FAL_KEY" : "ANTHROPIC_API_KEY";
-  if (process.env[envKey]) {
+  const envMap: Record<string, string> = {
+    fal_key: "FAL_KEY",
+    anthropic_api_key: "ANTHROPIC_API_KEY",
+    replicate_key: "REPLICATE_API_TOKEN",
+  };
+  const envKey = envMap[key];
+  if (envKey && process.env[envKey]) {
     return { value: process.env[envKey]!, source: "env variable" };
   }
 
@@ -81,14 +88,14 @@ export function getKeySource(
 }
 
 export function ensureKeys(
-  ...keys: ("fal_key" | "anthropic_api_key")[]
+  ...keys: ("fal_key" | "anthropic_api_key" | "replicate_key")[]
 ): void {
   const config = getConfig();
   const missing: string[] = [];
 
   for (const k of keys) {
     if (!config[k]) {
-      missing.push(k === "fal_key" ? "FAL_KEY" : "ANTHROPIC_API_KEY");
+      missing.push(k === "fal_key" ? "FAL_KEY" : k === "replicate_key" ? "REPLICATE_API_TOKEN" : "ANTHROPIC_API_KEY");
     }
   }
 
@@ -99,4 +106,16 @@ export function ensureKeys(
     );
     process.exit(1);
   }
+}
+
+export function resolveProvider(cliFlag?: string): ProviderName {
+  if (cliFlag === "fal" || cliFlag === "replicate") return cliFlag;
+
+  const env = process.env["PICTURE_IT_PROVIDER"];
+  if (env === "fal" || env === "replicate") return env;
+
+  const file = loadConfigFile();
+  if (file.default_provider) return file.default_provider;
+
+  return "fal";
 }

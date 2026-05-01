@@ -1,6 +1,8 @@
 // Core types for picture-it v2 — composable operations architecture
 
-export type FalModel =
+export type ProviderName = "fal" | "replicate";
+
+export type ModelId =
   // Generate only
   | "flux-schnell"
   | "flux-dev"
@@ -19,6 +21,8 @@ export type FalModel =
   | "seedream-v4"
   | "banana2"
   | "banana-pro";
+
+export type BgRemovalModel = "birefnet" | "bria" | "pixelcut" | "rembg";
 
 export type ColorGrade =
   | "cinematic"
@@ -176,25 +180,27 @@ export interface SatoriJSX {
 // --- Pipeline types ---
 
 export type PipelineStep =
-  | { op: "generate"; prompt: string; model?: FalModel; size?: string; platform?: string }
-  | { op: "edit"; prompt: string; model?: FalModel; assets?: string[]; size?: string }
-  | { op: "remove-bg" }
-  | { op: "replace-bg"; prompt: string; model?: FalModel }
+  | { op: "generate"; prompt: string; model?: ModelId; size?: string; platform?: string; provider?: ProviderName }
+  | { op: "edit"; prompt: string; model?: ModelId; assets?: string[]; size?: string; provider?: ProviderName }
+  | { op: "remove-bg"; model?: string; provider?: ProviderName }
+  | { op: "replace-bg"; prompt: string; model?: ModelId; provider?: ProviderName }
   | { op: "crop"; size: string; position?: string }
   | { op: "grade"; name: ColorGrade }
   | { op: "grain"; intensity?: number }
   | { op: "vignette"; opacity?: number }
   | { op: "text"; title: string; font?: string; color?: string; fontSize?: number; zone?: string }
   | { op: "compose"; overlays: string | Overlay[] }
-  | { op: "upscale"; scale?: number };
+  | { op: "upscale"; scale?: number; provider?: ProviderName };
 
 // --- Config ---
 
 export interface PictureItConfig {
   fal_key?: string;
-  default_model?: FalModel;
+  replicate_key?: string;
+  default_model?: ModelId;
   default_platform?: string;
   default_grade?: ColorGrade;
+  default_provider?: ProviderName;
 }
 
 // --- Platform/style presets ---
@@ -236,4 +242,5 @@ export interface BatchEntry {
   id: string;
   pipeline: PipelineStep[];
   output?: string;
+  provider?: ProviderName;
 }

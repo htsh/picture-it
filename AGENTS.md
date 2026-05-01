@@ -4,200 +4,92 @@ globs: "*.ts, *.tsx, *.html, *.css, *.js, *.jsx, package.json"
 alwaysApply: false
 ---
 
-Default to using Bun instead of Node.js.
+## Tooling
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
-- Use `bunx <package> <command>` instead of `npx <package> <command>`
-- Bun automatically loads .env, so don't use dotenv.
+Use Bun for all dev tasks. The published npm package targets Node 18+ (the build step in `scripts/build.ts` rewrites the shebang from `bun` to `node`).
 
-## APIs
-
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa.
-
-## Testing
-
-Use `bun test` to run tests.
-
-```ts#index.test.ts
-import { test, expect } from "bun:test";
-
-test("hello world", () => {
-  expect(1).toBe(1);
-});
+```bash
+bun install              # install deps
+bun run download-fonts   # required for text/compose/template commands
+bun run dev -- <args>    # run CLI from source (e.g. bun run dev -- generate --prompt "…")
+bun run build            # compile TS → dist/index.js with node shebang + native deps as externals
+bun test                 # test runner (no tests exist yet)
 ```
 
-## Frontend
+Bun auto-loads `.env` — never add `dotenv`.
 
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
+Avoid Bun-only runtime APIs in `index.ts` or `src/**` (the published artifact runs on plain Node). `node:fs`, `node:path`, etc. are fine.
 
-Server:
+## Output contract
 
-```ts#index.ts
-import index from "./index.html"
+- **stdout**: only the output file path (or JSON for `batch`).
+- **stderr**: all progress, diagnostics, and warnings — use `log()` from `src/operations.ts`.
+- **Exit 0** on success, **Exit 1** on failure.
 
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
-})
+Preserve subcommand names, flag names, and stdout shape unless the user asks for a breaking change.
+
+## Auth & config
+
+```bash
+picture-it auth --fal <key>        # stored in ~/.picture-it/config.json (mode 0600)
+picture-it auth --replicate <key>  # same file, separate key
+picture-it auth --status           # show key status for both providers
+picture-it config list             # dump config
 ```
 
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
+`FAL_KEY` and `REPLICATE_API_TOKEN` env vars override the config file. Key source precedence: env var → `~/.picture-it/config.json`.
 
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
+Fonts are downloaded to `fonts/` (managed by `src/fonts.ts` via `bun run download-fonts`). They are gitignored.
+
+## Provider selection
+
+```bash
+picture-it --provider replicate generate --prompt "..."   # global flag before subcommand
+picture-it config set default_provider replicate           # persist preference
 ```
 
-With the following `frontend.tsx`:
+Precedence: CLI `--provider` flag → `PICTURE_IT_PROVIDER` env → `default_provider` config → `fal`.
 
-```tsx#frontend.tsx
-import React from "react";
-import { createRoot } from "react-dom/client";
+## Architecture
 
-// import .css files directly and it works
-import './index.css';
+Single-entrypoint CLI: `index.ts` is a Commander program with inline command handlers. Each handler is thin — parse options, resolve provider, call `src/` modules, print output path.
 
-const root = createRoot(document.body);
+| File | Role |
+|------|------|
+| `src/providers/types.ts` | `ImageProvider` interface (`generate`, `edit`, `removeBg`, `upscale`, `prepareImageInput`) |
+| `src/providers/fal.ts` | FAL provider implementation |
+| `src/providers/replicate.ts` | Replicate provider implementation |
+| `src/providers/index.ts` | Factory: `getProvider(name)`, `configureProvider(name, key)` |
+| `src/model-router.ts` | Per-provider endpoint maps, costs, model selection (cheapest-capable) |
+| `src/operations.ts` | Shared helpers: `parseSize`, `readInput`, `writeOutput`, `ensureProviderKey`, `log` |
+| `src/pipeline.ts` | Executes `pipeline`/`batch` JSON specs (provider-aware, per-step overrides) |
+| `src/compositor.ts` | Sharp overlay compositing (`compose` command, advanced `text` JSX mode) |
+| `src/satori-jsx.ts` | Converts overlay/JSX specs to PNG via Satori + resvg-js |
+| `src/postprocess.ts` | Pure-Sharp filters: `applyColorGrade`, `applyGrain`, `applyVignette` |
+| `src/templates/` | Named no-AI layouts (text-hero, vs-comparison, social-card, feature-hero) |
+| `src/contrast.ts`, `src/zones.ts` | Text placement helpers (auto-contrast, safe zones) |
+| `src/config.ts` | Persistent key/value config in `~/.picture-it/config.json`; `resolveProvider()` |
+| `src/presets.ts` | Platform presets (og-image, youtube-thumbnail, etc.) |
+| `src/types.ts` | Shared types: `ModelId` (provider-agnostic model names), `ProviderName`, overlays, pipeline steps, config |
 
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
+Build externals — `scripts/build.ts` externalizes `sharp`, `@resvg/resvg-js`, `satori`, `@fal-ai/client`, and `replicate`. If you add a new native dependency, update the build script.
 
-root.render(<Frontend />);
-```
+`skill/picture-it/` is the Claude agent skill — update it alongside behavior changes.
 
-Then, run index.ts
+See also `CLAUDE.md` (parallel instruction file for Claude Code).
 
-```sh
-bun --hot ./index.ts
-```
+## Provider implementation notes
 
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
-
-## Project Notes
-
-`picture-it` is a CLI tool for composable image operations. Treat it like a command-line product, not a Bun-only app:
-
-- Local development uses Bun.
-- The published artifact targets Node.js 18+ via `scripts/build.ts`, which rewrites the shebang in `dist/index.js`.
-- Avoid introducing Bun-only runtime APIs into `index.ts` or `src/**` unless the code path is build-time only.
-
-Important CLI contract:
-
-- Commands print only the output path to stdout, or JSON for `batch`.
-- Progress and diagnostics go to stderr via `log()` in `src/operations.ts`.
-- Preserve subcommand names, flag names, and stdout shape unless the user explicitly asks for a breaking change.
-
-## Provider Work
-
-If you touch AI inference code, read `docs/add-replicate-provider.md` first.
-
-Current provider-related files:
-
-- `src/fal.ts`
-- `src/model-router.ts`
-- `src/types.ts`
-- `src/operations.ts`
-- `src/config.ts`
-- `src/pipeline.ts`
-- `index.ts`
-
-Planned provider layout from the current doc:
-
-- `src/providers/types.ts`
-- `src/providers/fal.ts`
-- `src/providers/replicate.ts`
-- `src/providers/index.ts`
-
-Also update the surrounding shipped/docs surface when provider behavior changes:
-
-- `package.json`
-- `bun.lock`
-- `scripts/build.ts`
-- `README.md`
-- `CLAUDE.md`
-- `skill/picture-it/SKILL.md`
-- `docs/add-replicate-provider.md`
-- `docs/replicate-model-mapping.md`
-
-Provider guardrails from the current plan:
-
-- Support both FAL and Replicate. Do not remove FAL.
-- Introduce a provider abstraction for inference work instead of branching provider logic throughout the CLI.
-- FAL remains the default provider unless the user explicitly changes config, env, or CLI flags.
-- Model names stay logical and provider-agnostic. Do not silently substitute unsupported models on another provider.
-- Keep static cost hints for routing; any actual-cost logging still goes to stderr.
-- Additive auth only: `auth --fal` stays, `auth --replicate` is added.
-- Provider selection precedence is: CLI flag, then `PICTURE_IT_PROVIDER`, then saved config, then default `fal`.
-- Prefer a global root `--provider <fal|replicate>` flag over duplicating provider flags on each inference subcommand.
-- Pipeline and batch specs may gain an optional top-level `provider` field; treat that as part of the reproducibility contract if implemented.
-
-Replicate coverage notes from `docs/replicate-model-mapping.md`:
-
-- Coverage survey is complete; version hashes, input schema diffs, pricing, and a few edge-case verifications are still pending.
-- Do not assume every logical model is available on Replicate:
-  - `pixelcut` is missing.
-  - `imagineart` exists only as a community 1.0 variant and is a likely FAL-only candidate.
-  - `birefnet` and `rembg` are community-model candidates on Replicate, not vendor-backed.
-  - `fibo-edit` exact slug and nano-banana edit-path behavior still need verification.
-- When provider support differs, prefer a clear user-facing error with supported alternatives over aliasing or silent fallback.
-- Until the team decides otherwise, prefer official Replicate models where possible and treat community-model support as an explicit choice, not an assumption.
-- The cost-table shape is not fully settled in the docs yet; do not assume shared-per-model pricing versus per-provider pricing without checking the latest plan.
-
-## Current Codebase Realities
-
-- The codebase is still FAL-first today. The provider abstraction is not implemented yet.
-- `src/pipeline.ts` and several CLI commands still depend on `uploadFile` and `uploadBuffer`.
-- Input handling is file-path based today. Do not assume HTTP URL inputs already work:
-  - `index.ts` validates `edit` inputs with `fs.existsSync`.
-  - `readInput()` in `src/operations.ts` reads from local paths only.
-- `scripts/build.ts` still externalizes `@fal-ai/client`; update build metadata and dependencies when adding `replicate`.
-- The migration plan assumes `prepareImageInput()` will hide the FAL upload vs Replicate data-URI difference. Keep provider-specific image preparation behind that seam.
+- **FAL**: uploads images via `fal.storage.upload()`, passes storage URLs to inference endpoints.
+- **Replicate**: passes images as data URIs (`data:image/png;base64,...`). Uses `replicate.run()` with `wait: { mode: "block" }`. No version hashes pinned yet — model slugs resolve to latest version.
+- **Image input preparation**: `prepareImageInput(buffer, filename)` abstracts FAL upload vs Replicate data URI. Pipeline steps call this instead of `uploadFile`/`uploadBuffer` directly.
+- **Model gaps on Replicate**: `pixelcut` (bg removal) and `imagineart` (generate) are FAL-only. Replicate `remove-bg` rejects `pixelcut` with a clear error suggesting `bria` or `rembg`.
+- **Cost tables**: per-provider in `src/model-router.ts` (`MODEL_COSTS[provider][model]`). Replicate prices are approximate — some models bill by hardware-second (actual cost only known post-run).
 
 ## Verification
 
-There is no meaningful automated test suite yet. When changing inference, auth, routing, or pipeline behavior, prefer this minimum verification set:
+No automated test suite yet. When changing inference, auth, routing, or pipeline behavior:
 
 - `bun run build`
-- smoke-test `generate`
-- smoke-test `edit`
-- smoke-test `remove-bg`
-- smoke-test `upscale`
-- smoke-test `pipeline`
-- smoke-test a non-AI path such as `template` or `text`
+- Smoke: `generate`, `edit`, `remove-bg`, `upscale`, `pipeline` (test both FAL and Replicate)
+- Smoke a non-AI path: `template` or `text`

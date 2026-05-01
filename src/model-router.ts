@@ -1,101 +1,205 @@
-import type { FalModel } from "./types.ts";
+import type { ModelId, BgRemovalModel, ProviderName } from "./types.ts";
 import { log } from "./operations.ts";
 
-// Models that have a generate (text-to-image) endpoint
-const GENERATE_ENDPOINTS: Partial<Record<FalModel, string>> = {
-  "flux-schnell": "fal-ai/flux/schnell",
-  "flux-dev": "fal-ai/flux/dev",
-  imagineart: "fal-ai/imagineart/imagineart-1.5-preview/text-to-image",
-  "recraft-v3": "fal-ai/recraft/v3/text-to-image",
-  "recraft-v4": "fal-ai/recraft/v4/pro/text-to-image",
-  fibo: "bria/fibo/generate",
-  // These also support generation
-  seedream: "fal-ai/bytedance/seedream/v4.5/text-to-image",
-  "seedream-v4": "fal-ai/bytedance/seedream/v4/text-to-image",
-  banana2: "fal-ai/nano-banana-2",
-  "banana-pro": "fal-ai/nano-banana-pro",
+// --- Per-provider generate endpoints ---
+
+const GENERATE_ENDPOINTS: Record<ProviderName, Partial<Record<ModelId, string>>> = {
+  fal: {
+    "flux-schnell": "fal-ai/flux/schnell",
+    "flux-dev": "fal-ai/flux/dev",
+    imagineart: "fal-ai/imagineart/imagineart-1.5-preview/text-to-image",
+    "recraft-v3": "fal-ai/recraft/v3/text-to-image",
+    "recraft-v4": "fal-ai/recraft/v4/pro/text-to-image",
+    fibo: "bria/fibo/generate",
+    seedream: "fal-ai/bytedance/seedream/v4.5/text-to-image",
+    "seedream-v4": "fal-ai/bytedance/seedream/v4/text-to-image",
+    banana2: "fal-ai/nano-banana-2",
+    "banana-pro": "fal-ai/nano-banana-pro",
+  },
+  replicate: {
+    "flux-schnell": "black-forest-labs/flux-schnell",
+    "flux-dev": "black-forest-labs/flux-dev",
+    "recraft-v3": "recraft-ai/recraft-v3",
+    "recraft-v4": "recraft-ai/recraft-v4",
+    fibo: "bria/fibo",
+    seedream: "bytedance/seedream-4.5",
+    "seedream-v4": "bytedance/seedream-4",
+    banana2: "google/nano-banana-2",
+    "banana-pro": "google/nano-banana-pro",
+  },
 };
 
-// Models that have an edit (image-to-image) endpoint
-const EDIT_ENDPOINTS: Partial<Record<FalModel, string>> = {
-  kontext: "fal-ai/flux-pro/kontext",
-  "kontext-lora": "fal-ai/flux-kontext-lora",
-  reve: "fal-ai/reve/edit",
-  "reve-fast": "fal-ai/reve-fast/edit",
-  "fibo-edit": "bria/fibo-edit/edit",
-  // These also support editing
-  seedream: "fal-ai/bytedance/seedream/v4.5/edit",
-  "seedream-v4": "fal-ai/bytedance/seedream/v4/edit",
-  banana2: "fal-ai/nano-banana-2/edit",
-  "banana-pro": "fal-ai/nano-banana-pro/edit",
+// --- Per-provider edit endpoints ---
+
+const EDIT_ENDPOINTS: Record<ProviderName, Partial<Record<ModelId, string>>> = {
+  fal: {
+    kontext: "fal-ai/flux-pro/kontext",
+    "kontext-lora": "fal-ai/flux-kontext-lora",
+    reve: "fal-ai/reve/edit",
+    "reve-fast": "fal-ai/reve-fast/edit",
+    "fibo-edit": "bria/fibo-edit/edit",
+    seedream: "fal-ai/bytedance/seedream/v4.5/edit",
+    "seedream-v4": "fal-ai/bytedance/seedream/v4/edit",
+    banana2: "fal-ai/nano-banana-2/edit",
+    "banana-pro": "fal-ai/nano-banana-pro/edit",
+  },
+  replicate: {
+    kontext: "black-forest-labs/flux-kontext-pro",
+    "kontext-lora": "black-forest-labs/flux-kontext-dev-lora",
+    reve: "reve/edit",
+    "reve-fast": "reve/edit-fast",
+    "fibo-edit": "bria/fibo-edit",
+    seedream: "bytedance/seedream-4.5",
+    "seedream-v4": "bytedance/seedream-4",
+    banana2: "google/nano-banana-2",
+    "banana-pro": "google/nano-banana-pro",
+  },
 };
 
-const MODEL_COSTS: Record<FalModel, number> = {
-  "flux-schnell": 0.003,
-  "reve-fast": 0.02,
-  "seedream-v4": 0.03,
-  imagineart: 0.03,
-  "flux-dev": 0.03,
-  "kontext-lora": 0.035,
-  seedream: 0.04,
-  kontext: 0.04,
-  reve: 0.04,
-  "fibo-edit": 0.04,
-  "recraft-v3": 0.04,
-  fibo: 0.04,
-  banana2: 0.08,
-  "banana-pro": 0.15,
-  "recraft-v4": 0.25,
+// --- Per-provider background removal endpoints ---
+
+const BG_REMOVAL_ENDPOINTS: Record<ProviderName, Record<string, string>> = {
+  fal: {
+    birefnet: "fal-ai/birefnet",
+    bria: "fal-ai/bria/background/remove",
+    pixelcut: "fal-ai/pixelcut/background-removal",
+    rembg: "fal-ai/smoretalk-ai/rembg-enhance",
+  },
+  replicate: {
+    birefnet: "men1scus/birefnet",
+    bria: "bria/remove-background",
+    rembg: "cjwbw/rembg",
+  },
 };
 
-export function getGenerateEndpoint(model: FalModel): string {
-  const ep = GENERATE_ENDPOINTS[model];
-  if (!ep) throw new Error(`Model ${model} does not support generation`);
+// --- Per-provider upscale endpoints ---
+
+const UPSCALE_ENDPOINTS: Record<ProviderName, string> = {
+  fal: "fal-ai/creative-upscaler",
+  replicate: "recraft-ai/recraft-creative-upscale",
+};
+
+// --- Per-provider model costs (for pre-call estimation) ---
+
+const MODEL_COSTS: Record<ProviderName, Partial<Record<ModelId, number>>> = {
+  fal: {
+    "flux-schnell": 0.003,
+    "reve-fast": 0.02,
+    "seedream-v4": 0.03,
+    imagineart: 0.03,
+    "flux-dev": 0.03,
+    "kontext-lora": 0.035,
+    seedream: 0.04,
+    kontext: 0.04,
+    reve: 0.04,
+    "fibo-edit": 0.04,
+    "recraft-v3": 0.04,
+    fibo: 0.04,
+    banana2: 0.08,
+    "banana-pro": 0.15,
+    "recraft-v4": 0.25,
+  },
+  replicate: {
+    "flux-schnell": 0.003,
+    "reve-fast": 0.02,
+    "seedream-v4": 0.03,
+    "flux-dev": 0.025,
+    "kontext-lora": 0.035,
+    seedream: 0.03,
+    kontext: 0.04,
+    reve: 0.04,
+    "fibo-edit": 0.04,
+    "recraft-v3": 0.04,
+    fibo: 0.04,
+    banana2: 0.08,
+    "banana-pro": 0.15,
+    "recraft-v4": 0.25,
+  },
+};
+
+// --- Endpoint accessors ---
+
+export function getGenerateEndpoint(provider: ProviderName, model: ModelId): string {
+  const ep = GENERATE_ENDPOINTS[provider][model];
+  if (!ep) throw new Error(`Model ${model} does not support generation on ${provider}`);
   return ep;
 }
 
-export function getEditEndpoint(model: FalModel): string {
-  const ep = EDIT_ENDPOINTS[model];
-  if (!ep) throw new Error(`Model ${model} does not support editing`);
+export function getEditEndpoint(provider: ProviderName, model: ModelId): string {
+  const ep = EDIT_ENDPOINTS[provider][model];
+  if (!ep) throw new Error(`Model ${model} does not support editing on ${provider}`);
   return ep;
 }
 
-export function canGenerate(model: FalModel): boolean {
-  return model in GENERATE_ENDPOINTS;
+export function getBgRemovalEndpoint(provider: ProviderName, model: string): string {
+  const eps = BG_REMOVAL_ENDPOINTS[provider];
+  const ep = eps[model] || eps["bria"]!;
+  return ep;
 }
 
-export function canEdit(model: FalModel): boolean {
-  return model in EDIT_ENDPOINTS;
+export function getUpscaleEndpoint(provider: ProviderName): string {
+  return UPSCALE_ENDPOINTS[provider]!;
 }
 
-export function getCost(model: FalModel): number {
-  return MODEL_COSTS[model];
+// --- Model capability checks ---
+
+export function canGenerate(provider: ProviderName, model: ModelId): boolean {
+  return model in GENERATE_ENDPOINTS[provider];
 }
 
-export function selectGenerateModel(explicit?: string, verbose = false): FalModel {
-  if (explicit && explicit in MODEL_COSTS) {
-    const m = explicit as FalModel;
-    if (!canGenerate(m)) throw new Error(`Model ${m} does not support generation`);
+export function canEdit(provider: ProviderName, model: ModelId): boolean {
+  return model in EDIT_ENDPOINTS[provider];
+}
+
+export function canRemoveBg(provider: ProviderName, model: string): boolean {
+  return model in BG_REMOVAL_ENDPOINTS[provider];
+}
+
+export function getCost(provider: ProviderName, model: ModelId): number {
+  return MODEL_COSTS[provider][model] ?? 0;
+}
+
+// --- Model selection (cheapest-capable for a provider) ---
+
+export function selectGenerateModel(
+  provider: ProviderName,
+  explicit?: string,
+  verbose = false
+): ModelId {
+  if (explicit) {
+    const m = explicit as ModelId;
+    if (!(m in MODEL_COSTS[provider])) {
+      throw new Error(`Model ${m} is not available on ${provider}`);
+    }
+    if (!canGenerate(provider, m)) {
+      throw new Error(`Model ${m} does not support generation on ${provider}`);
+    }
     return m;
   }
 
-  const model: FalModel = "flux-schnell";
-  if (verbose) log(`Model: ${model} ($${getCost(model)}) — fast generation`);
+  const model: ModelId = "flux-schnell";
+  if (verbose) log(`Model: ${model} ($${getCost(provider, model).toFixed(3)}) — fast generation`);
   return model;
 }
 
 export function selectEditModel(
+  provider: ProviderName,
   inputCount: number,
   explicit?: string,
   verbose = false
-): FalModel {
-  if (explicit && explicit in MODEL_COSTS) {
-    const m = explicit as FalModel;
-    if (!canEdit(m)) throw new Error(`Model ${m} does not support editing`);
+): ModelId {
+  if (explicit) {
+    const m = explicit as ModelId;
+    if (!(m in MODEL_COSTS[provider])) {
+      throw new Error(`Model ${m} is not available on ${provider}`);
+    }
+    if (!canEdit(provider, m)) {
+      throw new Error(`Model ${m} does not support editing on ${provider}`);
+    }
     return m;
   }
 
-  let model: FalModel;
+  let model: ModelId;
   let reason: string;
 
   if (inputCount > 10) {
@@ -109,9 +213,11 @@ export function selectEditModel(
     reason = "default single-image edit, $0.04, best targeted edits";
   }
 
-  if (verbose) log(`Model: ${model} ($${getCost(model)}) — ${reason}`);
+  if (verbose) log(`Model: ${model} ($${getCost(provider, model).toFixed(2)}) — ${reason}`);
   return model;
 }
+
+// --- Utility ---
 
 export function mapAspectRatio(width: number, height: number): string {
   const ratio = width / height;
