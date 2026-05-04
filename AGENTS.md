@@ -50,6 +50,15 @@ picture-it config set default_provider replicate           # persist preference
 
 Precedence: CLI `--provider` flag → `PICTURE_IT_PROVIDER` env → `default_provider` config → `fal`.
 
+Only `fal` and `replicate` are valid provider names. Invalid values from CLI, env, config, pipeline steps, or batch entries must fail fast with a clear stderr message; never silently fall back to another provider.
+
+Pipeline provider behavior:
+
+- `picture-it --provider replicate pipeline --spec ...` sets the initial provider for inference steps.
+- Individual inference steps may override with `"provider": "fal"` or `"provider": "replicate"`.
+- `batch` entries may set `"provider"` to override the command-level provider for that entry.
+- Once a pipeline step switches provider, later inference steps keep using that provider until another step overrides it.
+
 ## Architecture
 
 Single-entrypoint CLI: `index.ts` is a Commander program with inline command handlers. Each handler is thin — parse options, resolve provider, call `src/` modules, print output path.
@@ -84,6 +93,9 @@ See also `CLAUDE.md` (parallel instruction file for Claude Code).
 - **Replicate**: passes images as data URIs (`data:image/png;base64,...`). Uses `replicate.run()` with `wait: { mode: "block" }`. No version hashes pinned yet — model slugs resolve to latest version.
 - **Image input preparation**: `prepareImageInput(buffer, filename)` abstracts FAL upload vs Replicate data URI. Pipeline steps call this instead of `uploadFile`/`uploadBuffer` directly.
 - **Model gaps on Replicate**: `pixelcut` (bg removal) and `imagineart` (generate) are FAL-only. Replicate `remove-bg` rejects `pixelcut` with a clear error suggesting `bria` or `rembg`.
+- **Replicate edit inputs**: Kontext uses `input_image`; Seedream and Nano Banana use `image_input`. Do not use FAL-style `image_url`/`image_urls` or generic `image`/`images` fields unless the specific Replicate schema requires them.
+- **Replicate upscale**: Recraft creative upscale accepts `image` only. The CLI may accept `--scale` for command compatibility, but the Replicate provider must not send `scale`.
+- **Replicate Seedream generate**: use `size: "custom"` with `width`/`height` only when both dimensions are within the supported custom range. Otherwise use provider presets (`1K` for Seedream v4 when applicable, otherwise `2K`/`4K`) plus `aspect_ratio`.
 - **Cost tables**: per-provider in `src/model-router.ts` (`MODEL_COSTS[provider][model]`). Replicate prices are approximate — some models bill by hardware-second (actual cost only known post-run).
 
 ## Verification
@@ -91,5 +103,6 @@ See also `CLAUDE.md` (parallel instruction file for Claude Code).
 No automated test suite yet. When changing inference, auth, routing, or pipeline behavior:
 
 - `bun run build`
+- Smoke invalid provider handling (`--provider nope`, `PICTURE_IT_PROVIDER=nope`, bad pipeline step provider, bad batch entry provider)
 - Smoke: `generate`, `edit`, `remove-bg`, `upscale`, `pipeline` (test both FAL and Replicate)
 - Smoke a non-AI path: `template` or `text`
