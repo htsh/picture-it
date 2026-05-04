@@ -372,7 +372,8 @@ program
     const specPath = path.resolve(opts.spec);
     if (!fs.existsSync(specPath)) { log(`Not found: ${specPath}`); process.exit(1); }
     const steps: PipelineStep[] = JSON.parse(fs.readFileSync(specPath, "utf-8"));
-    const out = await executePipeline(steps, opts.output, opts.verbose);
+    const providerName = resolveProvider(cmd.parent?.getOptionValue("provider"));
+    const out = await executePipeline(steps, opts.output, opts.verbose, providerName);
     console.log(out);
   });
 
@@ -387,6 +388,7 @@ program
     const specPath = path.resolve(opts.spec);
     if (!fs.existsSync(specPath)) { log(`Not found: ${specPath}`); process.exit(1); }
 
+    const providerName = resolveProvider(cmd.parent?.getOptionValue("provider"));
     const entries: BatchEntry[] = JSON.parse(fs.readFileSync(specPath, "utf-8"));
     const outputDir = path.resolve(opts.outputDir);
     fs.mkdirSync(outputDir, { recursive: true });
@@ -395,7 +397,10 @@ program
     for (const entry of entries) {
       const outputPath = path.resolve(outputDir, entry.output || `${entry.id}.png`);
       try {
-        await executePipeline(entry.pipeline, outputPath, opts.verbose);
+        const entryProviderName = entry.provider !== undefined
+          ? resolveProvider(entry.provider, `batch entry ${entry.id} provider`)
+          : providerName;
+        await executePipeline(entry.pipeline, outputPath, opts.verbose, entryProviderName);
         results.push(outputPath);
         if (opts.verbose) log(`Done: ${outputPath}`);
       } catch (e) {

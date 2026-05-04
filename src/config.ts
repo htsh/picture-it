@@ -2,6 +2,9 @@ import fs from "fs";
 import path from "path";
 import type { PictureItConfig, ProviderName } from "./types.ts";
 
+type ConfigKey = "fal_key" | "anthropic_api_key" | "replicate_key";
+type ConfigWithLegacyKeys = PictureItConfig & { anthropic_api_key?: string };
+
 export const APP_DIR = path.join(
   process.env["HOME"] || process.env["USERPROFILE"] || "~",
   ".picture-it"
@@ -65,7 +68,7 @@ export function maskKey(key: string): string {
 }
 
 export function getKeySource(
-  key: "fal_key" | "anthropic_api_key" | "replicate_key"
+  key: ConfigKey
 ): { value: string; source: string } | null {
 
   const envMap: Record<string, string> = {
@@ -78,7 +81,7 @@ export function getKeySource(
     return { value: process.env[envKey]!, source: "env variable" };
   }
 
-  const file = loadConfigFile();
+  const file = loadConfigFile() as ConfigWithLegacyKeys;
   const fileVal = file[key];
   if (fileVal) {
     return { value: fileVal, source: "config.json" };
@@ -88,9 +91,9 @@ export function getKeySource(
 }
 
 export function ensureKeys(
-  ...keys: ("fal_key" | "anthropic_api_key" | "replicate_key")[]
+  ...keys: ConfigKey[]
 ): void {
-  const config = getConfig();
+  const config = getConfig() as ConfigWithLegacyKeys;
   const missing: string[] = [];
 
   for (const k of keys) {
@@ -108,14 +111,23 @@ export function ensureKeys(
   }
 }
 
-export function resolveProvider(cliFlag?: string): ProviderName {
-  if (cliFlag === "fal" || cliFlag === "replicate") return cliFlag;
+function parseProvider(value: string, source: string): ProviderName {
+  if (value === "fal" || value === "replicate") return value;
+
+  process.stderr.write(
+    `[picture-it] Invalid provider from ${source}: ${value}. Use "fal" or "replicate".\n`
+  );
+  process.exit(1);
+}
+
+export function resolveProvider(providerOverride?: string, source = "--provider"): ProviderName {
+  if (providerOverride !== undefined) return parseProvider(providerOverride, source);
 
   const env = process.env["PICTURE_IT_PROVIDER"];
-  if (env === "fal" || env === "replicate") return env;
+  if (env) return parseProvider(env, "PICTURE_IT_PROVIDER");
 
   const file = loadConfigFile();
-  if (file.default_provider) return file.default_provider;
+  if (file.default_provider) return parseProvider(file.default_provider, "default_provider config");
 
   return "fal";
 }

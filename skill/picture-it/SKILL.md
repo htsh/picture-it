@@ -1,19 +1,19 @@
 ---
 name: picture-it
 description: Generate and edit images from the CLI using picture-it. Use this skill whenever the user asks to create, edit, or manipulate images — blog headers, social cards, hero images, product comparisons, YouTube thumbnails, movie posters, magazine covers, Instagram edits, background removal, or any visual content. Also trigger when the user mentions picture-it by name, wants to composite images, apply color grading, add text to images, remove or replace backgrounds, crop/resize photos, or needs any kind of image generation or photo editing from the terminal. This skill covers multi-pass AI image editing workflows that chain composable operations together.
-compatibility: Requires Node.js 18+ and picture-it CLI (npm package). FAL_KEY environment variable needed for AI operations. Network access to fal.ai for image generation/editing.
+compatibility: Requires Node.js 18+ and picture-it CLI (npm package). AI operations require FAL_KEY or REPLICATE_API_TOKEN, depending on the selected provider. Network access to fal.ai or Replicate is required for image generation/editing.
 license: MIT
 metadata:
   author: geongeorge
-  version: "0.2.1"
+  version: "0.2.2"
   homepage: https://github.com/geongeorge/picture-it
   source: https://github.com/geongeorge/picture-it
   package: https://www.npmjs.com/package/picture-it
   openclaw:
-    primaryEnv: FAL_KEY
+    primaryEnv: FAL_KEY or REPLICATE_API_TOKEN
     requires:
       env:
-        - FAL_KEY
+        - FAL_KEY or REPLICATE_API_TOKEN
       bins:
         - node
         - picture-it
@@ -24,7 +24,7 @@ metadata:
         package: picture-it
         bins:
           - picture-it
-    data-transmission: User images are uploaded to fal.ai for AI processing. See https://fal.ai/privacy for retention policy.
+    data-transmission: AI operations send prompts and images to the selected provider: fal.ai for FAL or replicate.com for Replicate. Local-only commands do not transmit image data.
 ---
 
 # picture-it
@@ -49,19 +49,25 @@ picture-it download-fonts
 
 ### Credentials
 
-The FAL API key is required for AI operations (generate, edit, remove-bg, upscale). Set it via environment variable or the CLI:
+AI operations (`generate`, `edit`, `remove-bg`, `replace-bg`, `upscale`) require a key for the selected provider. FAL is the default provider; Replicate can be selected per command, via environment, or via config.
 
 ```bash
 # Option 1: Environment variable (preferred — use platform-managed secrets)
 export FAL_KEY=your-key-here
+export REPLICATE_API_TOKEN=your-token-here
 
 # Option 2: CLI config (stored in ~/.picture-it/config.json with 0600 permissions)
 picture-it auth --fal <fal-api-key>
+picture-it auth --replicate <replicate-api-token>
+
+# Provider selection
+picture-it --provider replicate generate --prompt "..."
+picture-it config set default_provider replicate
 ```
 
-NEVER paste API keys into chat. Always use environment variables or the CLI auth command. Get a FAL key from https://fal.ai.
+NEVER paste API keys into chat. Always use environment variables or the CLI auth command. Get a FAL key from https://fal.ai or a Replicate token from https://replicate.com.
 
-Note: User images are uploaded to fal.ai for AI processing when using generate, edit, remove-bg, or upscale commands. Local-only commands (crop, grade, grain, vignette, text, compose, template, info) do not transmit data.
+Note: AI commands send prompts and images to the selected provider. Local-only commands (`crop`, `grade`, `grain`, `vignette`, `text`, `compose`, `template`, `info`) do not transmit data.
 
 ## Core Concept
 
@@ -69,7 +75,7 @@ Every command takes an image in and outputs an image. Chain them to build anythi
 
 ## Before You Generate Anything — Think First
 
-Image generation costs real money ($0.03–$0.15 per FAL call). A 4-pass workflow is $0.10+. Don't burn budget on a vague idea — spend time planning before running any commands.
+Image generation costs real money. A 4-pass workflow can be $0.10+ depending on provider and model. Don't burn budget on a vague idea — spend time planning before running any commands.
 
 ### Step 1: Understand the purpose
 
@@ -87,8 +93,8 @@ If any of these are unclear, ask the user before proceeding. A 30-second questio
 
 Think through at least 3 different approaches before picking one. Consider:
 
-- **Can this be done without FAL?** Templates and Satori compose are free. A solid gradient + good typography is often enough.
-- **What's the minimum number of FAL calls?** Each call costs money. Plan the fewest passes that achieve the goal.
+- **Can this be done without an AI provider?** Templates and Satori compose are free. A solid gradient + good typography is often enough.
+- **What's the minimum number of AI calls?** Each call costs money. Plan the fewest passes that achieve the goal.
 - **Which technique fits?** Text-behind-subject for thumbnails, remove-bg + compose for product photos, multi-pass for cinematic scenes.
 
 Present your top 2-3 ideas to the user briefly — one sentence each — and let them pick before generating. Example:
@@ -116,7 +122,7 @@ This avoids discovering mid-way that you need a different approach and wasting t
 
 ## Commands Quick Reference
 
-| Command | What it does | Needs FAL? |
+| Command | What it does | Needs AI key? |
 |---|---|---|
 | `generate` | Create image from text prompt | Yes |
 | `edit` | Edit image(s) with AI | Yes |
@@ -200,13 +206,13 @@ This is the difference between mediocre and professional output. Read `reference
 
 ## Typography
 
-**For big titles and hero text:** Use the FAL model via `edit` — it handles large text well and integrates it into the scene naturally. No font size math needed, just say "very large bold" in the prompt.
+**For big titles and hero text:** Use an AI edit model — it handles large text well and integrates it into the scene naturally. No font size math needed, just say "very large bold" in the prompt.
 
 **For precise small text** (credits, URLs, badges, coverlines): Use `compose` or `text` with Satori. This is where font sizing matters — images display much smaller on phones. Quick rule: on a 1080px Instagram image, nothing under 36px is readable. Run `picture-it download-fonts` first if fonts aren't installed.
 
 **Hierarchy:** Max 3 text sizes per image. Brand name should be larger than tagline.
 
-**Font pairing:** Serif + sans-serif works best. For FAL model text, just describe the style in the prompt. For Satori, 3 fonts are bundled — drop more `.ttf` files into `~/.picture-it/fonts/`. Run `picture-it download-fonts` if fonts aren't installed. See `references/composition-guide.md` for pairing suggestions.
+**Font pairing:** Serif + sans-serif works best. For AI-rendered text, just describe the style in the prompt. For Satori, 3 fonts are bundled — drop more `.ttf` files into `~/.picture-it/fonts/`. Run `picture-it download-fonts` if fonts aren't installed. See `references/composition-guide.md` for pairing suggestions.
 
 ## Composition Techniques
 
@@ -246,7 +252,7 @@ picture-it edit -i photo.jpg --prompt "replace background with modern hotel entr
 # 1. Generate a scene
 picture-it generate --prompt "runner on mountain trail at golden hour" --model flux-dev --size 1280x720 -o runner.png
 
-# 2. Use FAL edit to add text BEHIND the subject
+# 2. Use AI edit to add text BEHIND the subject
 picture-it edit -i runner.png --prompt "Add 'RUN FASTER' in large bold black letters BEHIND the runner — the runner's body overlaps the text" --model seedream -o thumbnail.png
 ```
 
@@ -305,10 +311,10 @@ Read stdout to get the file path. This is how you chain commands.
 - Always use `--model bria` for `remove-bg` — the default birefnet leaves rectangular artifacts that cause ugly glow/shadow halos when compositing.
 - The `glow` effect in compose mode blurs the entire rectangular buffer, not the shape. Avoid using glow on cutout images — use the background color/lighting to create the glow effect instead.
 - The `shadow` effect has the same rectangular artifact issue. For cutout images on clean backgrounds, skip shadows entirely.
-- When editing with FAL, the model may alter product details (logos, text, design elements). For product images where accuracy matters, use `remove-bg` + `compose` instead of `edit` to preserve the original exactly.
+- When editing with AI, the model may alter product details (logos, text, design elements). For product images where accuracy matters, use `remove-bg` + `compose` instead of `edit` to preserve the original exactly.
 - SeedDream takes ~60 seconds per generation. Don't assume it failed if it's slow.
 - For `edit` with banana-pro, don't pass `resolution` or `limit_generations` params — it auto-detects.
-- Always `crop` to exact dimensions after FAL generation — FAL models output approximate sizes.
+- Always `crop` to exact dimensions after AI generation — image models output approximate sizes.
 - Use `flux-dev` ($0.03) not `flux-schnell` ($0.003) when image quality matters (hero images, portraits). The quality difference is significant.
 - Satori does NOT support: display:grid, transforms, animations, box-shadow, filters. Use flexbox only.
 - When adding text behind a subject with `edit`, be very explicit in the prompt: "the text is BEHIND the subject — the subject's body overlaps and partially covers the letters."

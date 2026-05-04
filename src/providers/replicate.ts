@@ -18,6 +18,7 @@ import type { ModelId } from "../types.ts";
 import type { ImageProvider, GenerateOpts, EditOpts, RemoveBgOpts, UpscaleOpts } from "./types.ts";
 
 let client: Replicate | null = null;
+type ReplicateModelRef = `${string}/${string}` | `${string}/${string}:${string}`;
 
 function getClient(): Replicate {
   if (!client) throw new Error("Replicate client not configured. Set REPLICATE_API_TOKEN.");
@@ -51,7 +52,7 @@ export const ReplicateProvider: ImageProvider = {
     const input = buildGenerateInput(model, opts.prompt, w, h);
 
     const repl = getClient();
-    const prediction = await repl.run(endpoint, { input, wait: { mode: "block" } });
+    const prediction = await repl.run(asModelRef(endpoint), { input, wait: { mode: "block" } });
 
     return downloadPredictionOutput(prediction);
   },
@@ -68,7 +69,7 @@ export const ReplicateProvider: ImageProvider = {
     const input = buildEditInput(model, opts.prompt, opts.inputUrls);
 
     const repl = getClient();
-    const prediction = await repl.run(endpoint, { input, wait: { mode: "block" } });
+    const prediction = await repl.run(asModelRef(endpoint), { input, wait: { mode: "block" } });
 
     return downloadPredictionOutput(prediction);
   },
@@ -88,7 +89,7 @@ export const ReplicateProvider: ImageProvider = {
     log(`Replicate: ${model} background removal`);
 
     const repl = getClient();
-    const prediction = await repl.run(endpoint, {
+    const prediction = await repl.run(asModelRef(endpoint), {
       input: { image: opts.inputUrl },
       wait: { mode: "block" },
     });
@@ -99,16 +100,16 @@ export const ReplicateProvider: ImageProvider = {
   // --- Upscale ---
 
   async upscale(opts: UpscaleOpts): Promise<Buffer> {
-    log(`Replicate: upscale ${opts.scale || 2}x`);
+    log("Replicate: creative upscale");
+    if (opts.scale && opts.scale !== 2) {
+      log("Replicate creative upscale does not accept --scale; using provider default.");
+    }
 
     const endpoint = getUpscaleEndpoint(providerName);
 
     const repl = getClient();
-    const prediction = await repl.run(endpoint, {
-      input: {
-        image: opts.inputUrl,
-        scale: opts.scale || 2,
-      },
+    const prediction = await repl.run(asModelRef(endpoint), {
+      input: { image: opts.inputUrl },
       wait: { mode: "block" },
     });
 
@@ -141,6 +142,10 @@ export const ReplicateProvider: ImageProvider = {
 
 // --- Input builders (per-model, Replicate-specific schemas) ---
 
+function asModelRef(endpoint: string): ReplicateModelRef {
+  return endpoint as ReplicateModelRef;
+}
+
 function buildGenerateInput(model: ModelId, prompt: string, w: number, h: number): Record<string, unknown> {
   return {
     prompt,
@@ -153,11 +158,19 @@ function buildEditInput(model: ModelId, prompt: string, inputUrls: string[]): Re
     prompt,
   };
 
-  if (model === "kontext" || model === "kontext-lora" || model === "reve" || model === "reve-fast" || model === "fibo-edit") {
+  if (model === "kontext" || model === "kontext-lora") {
+    return { ...base, input_image: inputUrls[0] };
+  }
+
+  if (model === "seedream" || model === "seedream-v4" || model === "banana2" || model === "banana-pro") {
+    return { ...base, image_input: inputUrls };
+  }
+
+  if (model === "reve" || model === "reve-fast" || model === "fibo-edit") {
     return { ...base, image: inputUrls[0] };
   }
 
-  return { ...base, images: inputUrls };
+  return { ...base, image_input: inputUrls };
 }
 
 function getCommonGenerateInput(model: ModelId, w: number, h: number): Record<string, unknown> {
@@ -187,10 +200,7 @@ function getCommonGenerateInput(model: ModelId, w: number, h: number): Record<st
 
     case "seedream":
     case "seedream-v4":
-      return {
-        num_images: 1,
-        size: `${w}x${h}`,
-      };
+      return buildSeedreamGenerateInput(model, w, h);
 
     case "banana2":
     case "banana-pro":
@@ -207,6 +217,40 @@ function getCommonGenerateInput(model: ModelId, w: number, h: number): Record<st
         output_format: "png",
       };
   }
+}
+
+function buildSeedreamGenerateInput(model: ModelId, w: number, h: number): Record<string, unknown> {
+  const width = Math.round(w);
+  const height = Math.round(h);
+  const canUseCustom =
+    width >= 1024 &&
+    height >= 1024 &&
+    width <= 4096 &&
+    height <= 4096;
+
+  if (canUseCustom) {
+    return {
+      size: "custom",
+      width,
+      height,
+      sequential_image_generation: "disabled",
+      max_images: 1,
+    };
+  }
+
+  const maxDim = Math.max(width, height);
+  const size = model === "seedream-v4" && maxDim <= 1024
+    ? "1K"
+    : maxDim > 2048
+      ? "4K"
+      : "2K";
+
+  return {
+    size,
+    aspect_ratio: mapAspectRatio(width, height),
+    sequential_image_generation: "disabled",
+    max_images: 1,
+  };
 }
 
 // --- Result download ---

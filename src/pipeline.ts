@@ -15,11 +15,12 @@ import type { ImageProvider } from "./providers/types.ts";
 export async function executePipeline(
   steps: PipelineStep[],
   outputPath: string,
-  verbose = false
+  verbose = false,
+  initialProviderName: ProviderName = resolveProvider()
 ): Promise<string> {
   let buffer: Buffer | null = null;
   let provider: ImageProvider | null = null;
-  let providerName: ProviderName = "fal";
+  let providerName: ProviderName = initialProviderName;
 
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i]!;
@@ -27,8 +28,8 @@ export async function executePipeline(
 
     // Resolve provider for this step (step-level override wins, then previously resolved)
     if (step.op === "generate" || step.op === "edit" || step.op === "remove-bg" || step.op === "replace-bg" || step.op === "upscale") {
-      const stepProviderName = (step as any).provider
-        ? resolveProvider((step as any).provider)
+      const stepProviderName = (step as any).provider !== undefined
+        ? resolveProvider((step as any).provider, `pipeline step ${i + 1} provider`)
         : providerName;
       if (!provider || stepProviderName !== provider.name) {
         providerName = stepProviderName;
@@ -70,7 +71,11 @@ export async function executePipeline(
             urls.push(await provider!.prepareImageInput(assetBuf, path.basename(asset)));
           }
         }
-        const size = step.size ? parseSize(step.size) : buffer ? await getBufferSize(buffer) : { width: 1200, height: 630 };
+        const size: { width: number; height: number } = step.size
+          ? parseSize(step.size)
+          : buffer
+            ? await getBufferSize(buffer)
+            : { width: 1200, height: 630 };
         buffer = await provider!.edit({
           inputUrls: urls,
           prompt: step.prompt,
